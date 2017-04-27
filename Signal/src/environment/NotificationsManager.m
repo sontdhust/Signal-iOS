@@ -136,7 +136,7 @@
         }
         notification.alertBody = alertBodyString;
 
-        [[PushManager sharedManager] presentNotification:notification];
+        [[PushManager sharedManager] presentNotification:notification checkForCancel:NO];
     } else {
         if ([Environment.preferences soundInForeground]) {
             AudioServicesPlayAlertSound(_newMessageSound);
@@ -149,6 +149,10 @@
                             inThread:(TSThread *)thread
                      contactsManager:(id<ContactsManagerProtocol>)contactsManager
 {
+    if (thread.isMuted) {
+        return;
+    }
+
     NSString *messageDescription = message.description;
 
     if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive && messageDescription) {
@@ -193,7 +197,7 @@
                 break;
         }
 
-        [[PushManager sharedManager] presentNotification:notification];
+        [[PushManager sharedManager] presentNotification:notification checkForCancel:YES];
     } else {
         if ([Environment.preferences soundInForeground]) {
             AudioServicesPlayAlertSound(_newMessageSound);
@@ -211,31 +215,33 @@
 
 - (void)presentNotification:(UILocalNotification *)notification identifier:(NSString *)identifier
 {
-    AssertIsOnMainThread();
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // Replace any existing notification
+        // e.g. when an "Incoming Call" notification gets replaced with a "Missed Call" notification.
+        if (self.currentNotifications[identifier]) {
+            [self cancelNotificationWithIdentifier:identifier];
+        }
 
-    // Replace any existing notification
-    // e.g. when an "Incoming Call" notification gets replaced with a "Missed Call" notification.
-    if (self.currentNotifications[identifier]) {
-        [self cancelNotificationWithIdentifier:identifier];
-    }
+        [[UIApplication sharedApplication] scheduleLocalNotification:notification];
+        DDLogDebug(@"%@ presenting notification with identifier: %@", self.tag, identifier);
 
-    [[UIApplication sharedApplication] scheduleLocalNotification:notification];
-    DDLogDebug(@"%@ presenting notification with identifier: %@", self.tag, identifier);
-
-    self.currentNotifications[identifier] = notification;
+        self.currentNotifications[identifier] = notification;
+    });
 }
 
 - (void)cancelNotificationWithIdentifier:(NSString *)identifier
 {
-    AssertIsOnMainThread();
-    UILocalNotification *notification = self.currentNotifications[identifier];
-    if (!notification) {
-        DDLogWarn(@"%@ Couldn't cancel notification because none was found with identifier: %@", self.tag, identifier);
-        return;
-    }
-    [self.currentNotifications removeObjectForKey:identifier];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UILocalNotification *notification = self.currentNotifications[identifier];
+        if (!notification) {
+            DDLogWarn(
+                @"%@ Couldn't cancel notification because none was found with identifier: %@", self.tag, identifier);
+            return;
+        }
+        [self.currentNotifications removeObjectForKey:identifier];
 
-    [[UIApplication sharedApplication] cancelLocalNotification:notification];
+        [[UIApplication sharedApplication] cancelLocalNotification:notification];
+    });
 }
 
 #pragma mark - Logging

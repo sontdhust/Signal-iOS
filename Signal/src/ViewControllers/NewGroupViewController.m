@@ -240,8 +240,22 @@ static NSString *const kUnwindToMessagesViewSegue = @"UnwindToMessagesViewSegue"
             [self setupGroupImageButton:_thread.groupModel.groupImage];
         }
     }
-    _nameGroupTextField.placeholder = NSLocalizedString(@"NEW_GROUP_NAMEGROUP_REQUEST_DEFAULT", @"");
+    _nameGroupTextField.placeholder
+        = NSLocalizedString(@"NEW_GROUP_NAMEGROUP_REQUEST_DEFAULT", @"Placeholder text for group name field");
     _addPeopleLabel.text            = NSLocalizedString(@"NEW_GROUP_REQUEST_ADDPEOPLE", @"");
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+
+    if (self.shouldEditGroupNameOnAppear) {
+        [self.nameGroupTextField becomeFirstResponder];
+    } else if (self.shouldEditAvatarOnAppear) {
+        [self addGroupPhoto:nil];
+    }
+    self.shouldEditGroupNameOnAppear = NO;
+    self.shouldEditAvatarOnAppear = NO;
 }
 
 #pragma mark - Initializers
@@ -309,14 +323,14 @@ static NSString *const kUnwindToMessagesViewSegue = @"UnwindToMessagesViewSegue"
                          TSOutgoingMessage *message =
                              [[TSOutgoingMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
                                                                  inThread:self.thread
-                                                              messageBody:@""
-                                                            attachmentIds:[NSMutableArray new]];
+                                                         groupMetaMessage:TSGroupMessageNew];
 
-                         message.groupMetaMessage = TSGroupMessageNew;
-                         message.customMessage = NSLocalizedString(@"GROUP_CREATED", nil);
+                         // This will save the message.
+                         [message updateWithCustomMessage:NSLocalizedString(@"GROUP_CREATED", nil)];
                          if (model.groupImage) {
                              [self.messageSender sendAttachmentData:UIImagePNGRepresentation(model.groupImage)
                                                         contentType:OWSMimeTypeImagePng
+                                                           filename:nil
                                                           inMessage:message
                                                             success:popToThread
                                                             failure:removeThreadWithError];

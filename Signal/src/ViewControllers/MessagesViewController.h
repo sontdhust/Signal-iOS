@@ -37,11 +37,10 @@ extern NSString *const OWSMessagesViewControllerDidAppearNotification;
 
 
 @property (nonatomic, readonly) TSThread *thread;
-@property (nonatomic, strong) MPMoviePlayerController *videoPlayer;
-@property (nonatomic, strong) AVAudioPlayer *audioPlayer;
-@property (nonatomic, strong) AVAudioRecorder *audioRecorder;
 
-- (void)configureForThread:(TSThread *)thread keyboardOnViewAppearing:(BOOL)keyboardAppearing;
+- (void)configureForThread:(TSThread *)thread
+    keyboardOnViewAppearing:(BOOL)keyboardAppearing
+        callOnViewAppearing:(BOOL)callOnViewAppearing;
 - (void)popKeyBoard;
 
 #pragma mark 3D Touch Methods

@@ -6,13 +6,14 @@
 #import "AppDelegate.h"
 #import "AttachmentSharing.h"
 #import "BlockListUIUtils.h"
-#import "DebugUITableViewController.h"
 #import "BlockListViewController.h"
+#import "DebugUITableViewController.h"
 #import "Environment.h"
 #import "FingerprintViewController.h"
 #import "FullImageViewController.h"
 #import "NSDate+millisecondTimeStamp.h"
 #import "NewGroupViewController.h"
+#import "OWSAudioAttachmentPlayer.h"
 #import "OWSCall.h"
 #import "OWSCallCollectionViewCell.h"
 #import "OWSContactsManager.h"
@@ -21,8 +22,10 @@
 #import "OWSDisplayedMessageCollectionViewCell.h"
 #import "OWSExpirableMessageView.h"
 #import "OWSIncomingMessageCollectionViewCell.h"
+#import "OWSMessageCollectionViewCell.h"
 #import "OWSMessagesBubblesSizeCalculator.h"
 #import "OWSOutgoingMessageCollectionViewCell.h"
+#import "OWSUnknownContactBlockOfferMessage.h"
 #import "PropertyListPreferences.h"
 #import "Signal-Swift.h"
 #import "SignalKeyingStorage.h"
@@ -42,7 +45,9 @@
 #import "UIUtil.h"
 #import "UIViewController+CameraPermissions.h"
 #import "UIViewController+OWS.h"
+#import "ViewControllerUtils.h"
 #import <AddressBookUI/AddressBookUI.h>
+#import <AssetsLibrary/AssetsLibrary.h>
 #import <ContactsUI/CNContactViewController.h>
 #import <JSQMessagesViewController/JSQMessagesBubbleImage.h>
 #import <JSQMessagesViewController/JSQMessagesBubbleImageFactory.h>
@@ -108,20 +113,16 @@ typedef enum : NSUInteger {
     return YES;
 }
 
-- (BOOL)pasteBoardHasPossibleAttachment {
-    NSSet *pasteboardUTISet = [NSSet setWithArray:[UIPasteboard generalPasteboard].pasteboardTypes];
-    if ([UIPasteboard generalPasteboard].numberOfItems == 1 &&
-        [[SignalAttachment validInputUTISet] intersectsSet:pasteboardUTISet]) {
-        // We don't want to load/convert images more than once so we
-        // only do a cursory validation pass at this time.
-        return YES;
-    }
-    return NO;
+- (BOOL)pasteboardHasPossibleAttachment
+{
+    // We don't want to load/convert images more than once so we
+    // only do a cursory validation pass at this time.
+    return ([SignalAttachment pasteboardHasPossibleAttachment] && ![SignalAttachment pasteboardHasText]);
 }
 
 - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
     if (action == @selector(paste:)) {
-        if ([self pasteBoardHasPossibleAttachment]) {
+        if ([self pasteboardHasPossibleAttachment]) {
             return YES;
         }
     }
@@ -129,7 +130,7 @@ typedef enum : NSUInteger {
 }
 
 - (void)paste:(id)sender {
-    if ([self pasteBoardHasPossibleAttachment]) {
+    if ([self pasteboardHasPossibleAttachment]) {
         SignalAttachment *attachment = [SignalAttachment attachmentFromPasteboard];
         // Note: attachment might be nil or have an error at this point; that's fine.
         [self.textViewPasteDelegate didPasteAttachment:attachment];
@@ -172,14 +173,12 @@ typedef enum : NSUInteger {
 
 #pragma mark -
 
-@interface MessagesViewController () <JSQMessagesComposerTextViewPasteDelegate, OWSTextViewPasteDelegate> {
+@interface MessagesViewController () <JSQMessagesComposerTextViewPasteDelegate,
+    OWSTextViewPasteDelegate,
+    UIDocumentMenuDelegate,
+    UIDocumentPickerDelegate> {
     UIImage *tappedImage;
     BOOL isGroupConversation;
-    
-    UIView *_unreadContainer;
-    UIImageView *_unreadBackground;
-    UILabel *_unreadLabel;
-    NSUInteger _unreadCount;
 }
 
 @property (nonatomic) TSThread *thread;
@@ -193,8 +192,9 @@ typedef enum : NSUInteger {
 @property (nonatomic) JSQMessagesBubbleImage *currentlyOutgoingBubbleImageData;
 @property (nonatomic) JSQMessagesBubbleImage *outgoingMessageFailedImageData;
 
-@property (nonatomic) NSTimer *audioPlayerPoller;
-@property (nonatomic) TSVideoAttachmentAdapter *currentMediaAdapter;
+@property (nonatomic) MPMoviePlayerController *videoPlayer;
+@property (nonatomic) AVAudioRecorder *audioRecorder;
+@property (nonatomic) OWSAudioAttachmentPlayer *audioAttachmentPlayer;
 
 @property (nonatomic) NSTimer *readTimer;
 @property (nonatomic) UIView *navigationBarTitleView;
@@ -203,10 +203,16 @@ typedef enum : NSUInteger {
 @property (nonatomic) UIButton *attachButton;
 @property (nonatomic) UIView *blockStateIndicator;
 
+// Back Button Unread Count
+@property (nonatomic, readonly) UIView *backButtonUnreadCountView;
+@property (nonatomic, readonly) UILabel *backButtonUnreadCountLabel;
+@property (nonatomic, readonly) NSUInteger backButtonUnreadCount;
+
 @property (nonatomic) CGFloat previousCollectionViewFrameWidth;
 
 @property (nonatomic) NSUInteger page;
 @property (nonatomic) BOOL composeOnOpen;
+@property (nonatomic) BOOL callOnOpen;
 @property (nonatomic) BOOL peek;
 
 @property (nonatomic, readonly) OWSContactsManager *contactsManager;
@@ -306,10 +312,18 @@ typedef enum : NSUInteger {
     [self hideInputIfNeeded];
 }
 
-- (void)configureForThread:(TSThread *)thread keyboardOnViewAppearing:(BOOL)keyboardAppearing {
-    _thread                        = thread;
-    isGroupConversation            = [self.thread isKindOfClass:[TSGroupThread class]];
-    _composeOnOpen                 = keyboardAppearing;
+- (void)configureForThread:(TSThread *)thread
+    keyboardOnViewAppearing:(BOOL)keyboardOnViewAppearing
+        callOnViewAppearing:(BOOL)callOnViewAppearing
+{
+    if (callOnViewAppearing) {
+        keyboardOnViewAppearing = NO;
+    }
+
+    _thread = thread;
+    isGroupConversation = [self.thread isKindOfClass:[TSGroupThread class]];
+    _composeOnOpen = keyboardOnViewAppearing;
+    _callOnOpen = callOnViewAppearing;
 
     [self markAllMessagesAsRead];
 
@@ -385,6 +399,14 @@ typedef enum : NSUInteger {
     self.senderDisplayName = ME_MESSAGE_IDENTIFIER;
 
     [self initializeToolbars];
+
+    if ([self.thread isKindOfClass:[TSContactThread class]]) {
+        TSContactThread *contactThread = (TSContactThread *)self.thread;
+        [ThreadUtil createBlockOfferIfNecessary:contactThread
+                                 storageManager:self.storageManager
+                                contactsManager:self.contactsManager
+                                blockingManager:self.blockingManager];
+    }
 }
 
 - (void)viewDidLayoutSubviews
@@ -446,6 +468,10 @@ typedef enum : NSUInteger {
                                                    object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(startExpirationTimerAnimations)
+                                                     name:UIApplicationWillEnterForegroundNotification
+                                                   object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(resetContentAndLayout)
                                                      name:UIApplicationWillEnterForegroundNotification
                                                    object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self
@@ -517,15 +543,25 @@ typedef enum : NSUInteger {
     // need to set them every time we enter this view.
     SEL saveSelector = NSSelectorFromString(@"save:");
     SEL shareSelector = NSSelectorFromString(@"share:");
-    [UIMenuController sharedMenuController].menuItems = @[ [[UIMenuItem alloc] initWithTitle:NSLocalizedString(@"EDIT_ITEM_SAVE_ACTION",
-                                                                                                               @"Short name for edit menu item to save contents of media message.")
-                                                                                      action:saveSelector],
-                                                           [[UIMenuItem alloc] initWithTitle:NSLocalizedString(@"EDIT_ITEM_SHARE_ACTION",
-                                                                                                               @"Short name for edit menu item to share contents of media message.")
-                                                                                      action:shareSelector],
-                                                           ];
+    [UIMenuController sharedMenuController].menuItems = @[
+        [[UIMenuItem alloc] initWithTitle:NSLocalizedString(@"EDIT_ITEM_SAVE_ACTION",
+                                              @"Short name for edit menu item to save contents of media message.")
+                                   action:saveSelector],
+        [[UIMenuItem alloc] initWithTitle:NSLocalizedString(@"EDIT_ITEM_SHARE_ACTION",
+                                              @"Short name for edit menu item to share contents of media message.")
+                                   action:shareSelector],
+    ];
 
     [self ensureBlockStateIndicator];
+
+    [self resetContentAndLayout];
+}
+
+- (void)resetContentAndLayout
+{
+    // Avoid layout corrupt issues and out-of-date message subtitles.
+    [self.collectionView.collectionViewLayout invalidateLayout];
+    [self.collectionView reloadData];
 }
 
 - (void)setUserHasScrolled:(BOOL)userHasScrolled {
@@ -679,26 +715,20 @@ typedef enum : NSUInteger {
     [self dismissKeyBoard];
     [self startReadTimer];
 
-    // TODO prep this sync one time before view loads so we don't have to repaint.
-    [self updateBackButtonAsync];
+    [self updateBackButtonUnreadCount];
 
     [self.inputToolbar.contentView.textView endEditing:YES];
 
     self.inputToolbar.contentView.textView.editable = YES;
     if (_composeOnOpen && !self.inputToolbar.hidden) {
         [self popKeyBoard];
+        _composeOnOpen = NO;
     }
-}
-
-- (void)updateBackButtonAsync {
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        NSUInteger count = [self.messagesManager unreadMessagesCountExcept:self.thread];
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (self) {
-                [self setUnreadCount:count];
-            }
-        });
-    });
+    if (_callOnOpen) {
+        [self callAction:nil];
+        _callOnOpen = NO;
+    }
+    [self updateNavigationBarSubtitleLabel];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -708,11 +738,7 @@ typedef enum : NSUInteger {
     // Since we're using a custom back button, we have to do some extra work to manage the interactivePopGestureRecognizer
     self.navigationController.interactivePopGestureRecognizer.delegate = nil;
 
-    [_unreadContainer removeFromSuperview];
-    _unreadContainer = nil;
-
-    [_audioPlayerPoller invalidate];
-    [_audioPlayer stop];
+    [self.audioAttachmentPlayer stop];
 
     // reset all audio bars to 0
     JSQMessagesCollectionView *collectionView = self.collectionView;
@@ -774,6 +800,38 @@ typedef enum : NSUInteger {
     (OWSDisappearingMessagesConfiguration *)disappearingMessagesConfiguration
 {
     UIBarButtonItem *backItem = [self createOWSBackButton];
+    const CGFloat unreadCountViewDiameter = 16;
+    if (_backButtonUnreadCountView == nil) {
+        _backButtonUnreadCountView = [UIView new];
+        _backButtonUnreadCountView.layer.cornerRadius = unreadCountViewDiameter / 2;
+        _backButtonUnreadCountView.backgroundColor = [UIColor redColor];
+        _backButtonUnreadCountView.hidden = YES;
+        _backButtonUnreadCountView.userInteractionEnabled = NO;
+
+        _backButtonUnreadCountLabel = [UILabel new];
+        _backButtonUnreadCountLabel.backgroundColor = [UIColor clearColor];
+        _backButtonUnreadCountLabel.textColor = [UIColor whiteColor];
+        _backButtonUnreadCountLabel.font = [UIFont systemFontOfSize:11];
+        _backButtonUnreadCountLabel.textAlignment = NSTextAlignmentCenter;
+    }
+    // This method gets called multiple times, so it's important we re-layout the unread badge
+    // with respect to the new backItem.
+    [backItem.customView addSubview:_backButtonUnreadCountView];
+    [_backButtonUnreadCountView autoPinEdgeToSuperviewEdge:ALEdgeTop withInset:-6];
+    [_backButtonUnreadCountView autoPinEdgeToSuperviewEdge:ALEdgeLeft withInset:1];
+    [_backButtonUnreadCountView autoSetDimension:ALDimensionHeight toSize:unreadCountViewDiameter];
+    // We set a min width, but we will also pin to our subview label, so we can grow to accommodate multiple digits.
+    [_backButtonUnreadCountView autoSetDimension:ALDimensionWidth
+                                          toSize:unreadCountViewDiameter
+                                        relation:NSLayoutRelationGreaterThanOrEqual];
+
+    [_backButtonUnreadCountView addSubview:_backButtonUnreadCountLabel];
+    [_backButtonUnreadCountLabel autoPinWidthToSuperviewWithMargin:4];
+    [_backButtonUnreadCountLabel autoPinHeightToSuperview];
+
+    // Initialize newly created unread count badge to accurately reflect the current unread count.
+    [self updateBackButtonUnreadCount];
+
 
     const CGFloat kTitleVSpacing = 0.f;
     if (!self.navigationBarTitleView) {
@@ -792,10 +850,7 @@ typedef enum : NSUInteger {
         [self.navigationBarTitleView addSubview:self.navigationBarTitleLabel];
         
         self.navigationBarSubtitleLabel = [UILabel new];
-        self.navigationBarSubtitleLabel.textColor = [UIColor colorWithWhite:0.9f alpha:1.f];
-        self.navigationBarSubtitleLabel.font = [UIFont ows_regularFontWithSize:9.f];
-        self.navigationBarSubtitleLabel.text = NSLocalizedString(@"MESSAGES_VIEW_TITLE_SUBTITLE",
-                                                                 @"The subtitle for the messages view title indicates that the title can be tapped to access settings for this conversation.");
+        [self updateNavigationBarSubtitleLabel];
         [self.navigationBarTitleView addSubview:self.navigationBarSubtitleLabel];
     }
     
@@ -922,6 +977,32 @@ typedef enum : NSUInteger {
     self.navigationItem.rightBarButtonItems = [barButtons copy];
 }
 
+- (void)updateNavigationBarSubtitleLabel
+{
+    NSMutableAttributedString *subtitleText = [NSMutableAttributedString new];
+    if (self.thread.isMuted) {
+        // Show a "mute" icon before the navigation bar subtitle if this thread is muted.
+        [subtitleText
+            appendAttributedString:[[NSAttributedString alloc]
+                                       initWithString:@"\ue067  "
+                                           attributes:@{
+                                               NSFontAttributeName : [UIFont ows_elegantIconsFont:7.f],
+                                               NSForegroundColorAttributeName : [UIColor colorWithWhite:0.9f alpha:1.f],
+                                           }]];
+    }
+    [subtitleText
+        appendAttributedString:[[NSAttributedString alloc]
+                                   initWithString:NSLocalizedString(@"MESSAGES_VIEW_TITLE_SUBTITLE",
+                                                      @"The subtitle for the messages view title indicates that the "
+                                                      @"title can be tapped to access settings for this conversation.")
+                                       attributes:@{
+                                           NSFontAttributeName : [UIFont ows_regularFontWithSize:9.f],
+                                           NSForegroundColorAttributeName : [UIColor colorWithWhite:0.9f alpha:1.f],
+                                       }]];
+    self.navigationBarSubtitleLabel.attributedText = subtitleText;
+    [self.navigationBarSubtitleLabel sizeToFit];
+}
+
 - (void)initializeToolbars
 {
     // HACK JSQMessagesViewController doesn't yet support dynamic type in the inputToolbar.
@@ -972,6 +1053,10 @@ typedef enum : NSUInteger {
 
 - (void)showFingerprintWithTheirIdentityKey:(NSData *)theirIdentityKey theirSignalId:(NSString *)theirSignalId
 {
+    // Ensure keyboard isn't hiding the "safety numbers changed" interaction when we
+    // return from FingerprintViewController.
+    [self dismissKeyBoard];
+
     OWSFingerprintBuilder *builder =
         [[OWSFingerprintBuilder alloc] initWithStorageManager:self.storageManager contactsManager:self.contactsManager];
     OWSFingerprint *fingerprint =
@@ -1060,35 +1145,24 @@ typedef enum : NSUInteger {
 
     text = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 
-    // Limit outgoing text messages to 64kb.
-    //
-    // TODO: Convert large text messages to attachments
-    // which are presented as normal text messages.
-    const NSUInteger kMaxTextMessageSize = 64 * 1024;
-    if ([text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > kMaxTextMessageSize) {
-        UIAlertController *controller =
-        [UIAlertController alertControllerWithTitle:NSLocalizedString(@"CONVERSATION_VIEW_TEXT_MESSAGE_TOO_LARGE_ALERT_TITLE",
-                                                                      @"The title of the 'text message too large' alert.")
-                                            message:NSLocalizedString(@"CONVERSATION_VIEW_TEXT_MESSAGE_TOO_LARGE_ALERT_MESSAGE",
-                                                                      @"The message of the 'text message too large' alert.")
-                                     preferredStyle:UIAlertControllerStyleAlert];
-        [controller addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"OK", nil)
-                                                       style:UIAlertActionStyleDefault
-                                                     handler:nil]];
-        [self presentViewController:controller
-                           animated:YES
-                         completion:nil];
-        return;
-    }
-    
     if (text.length > 0) {
         if ([Environment.preferences soundInForeground]) {
             [JSQSystemSoundPlayer jsq_playMessageSentSound];
         }
-
-        [ThreadUtil sendMessageWithText:text
-                               inThread:self.thread
-                          messageSender:self.messageSender];
+        // Limit outgoing text messages to 16kb.
+        //
+        // We convert large text messages to attachments
+        // which are presented as normal text messages.
+        const NSUInteger kOversizeTextMessageSizeThreshold = 16 * 1024;
+        if ([text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] >= kOversizeTextMessageSizeThreshold) {
+            SignalAttachment *attachment =
+                [SignalAttachment attachmentWithData:[text dataUsingEncoding:NSUTF8StringEncoding]
+                                             dataUTI:SignalAttachment.kOversizeTextAttachmentUTI
+                                            filename:nil];
+            [ThreadUtil sendMessageWithAttachment:attachment inThread:self.thread messageSender:self.messageSender];
+        } else {
+            [ThreadUtil sendMessageWithText:text inThread:self.thread messageSender:self.messageSender];
+        }
         if (updateKeyboardState)
         {
             [self toggleDefaultKeyboard];
@@ -1123,8 +1197,26 @@ typedef enum : NSUInteger {
     // JSQM does some setup in super method
     [super collectionView:collectionView shouldShowMenuForItemAtIndexPath:indexPath];
 
+
+    // Don't show menu for in-progress downloads.
+    // We don't want to give the user the wrong idea that deleting would "cancel" the download.
+    id<OWSMessageData> message = [self messageAtIndexPath:indexPath];
+    if (message.isMediaMessage && [message.media isKindOfClass:[AttachmentPointerAdapter class]]) {
+        AttachmentPointerAdapter *attachmentPointerAdapter = (AttachmentPointerAdapter *)message.media;
+        return attachmentPointerAdapter.attachmentPointer.state == TSAttachmentPointerStateFailed;
+    }
+
     // Super method returns false for media methods. We want menu for *all* items
     return YES;
+}
+
+- (void)collectionView:(UICollectionView *)collectionView
+       willDisplayCell:(UICollectionViewCell *)cell
+    forItemAtIndexPath:(NSIndexPath *)indexPath
+{
+    if ([cell conformsToProtocol:@protocol(OWSMessageCollectionViewCell)]) {
+        [((id<OWSMessageCollectionViewCell>)cell) setCellVisible:YES];
+    }
 }
 
 - (void)collectionView:(UICollectionView *)collectionView
@@ -1134,6 +1226,10 @@ typedef enum : NSUInteger {
     if ([cell conformsToProtocol:@protocol(OWSExpirableMessageView)]) {
         id<OWSExpirableMessageView> expirableView = (id<OWSExpirableMessageView>)cell;
         [expirableView stopExpirationTimer];
+    }
+
+    if ([cell conformsToProtocol:@protocol(OWSMessageCollectionViewCell)]) {
+        [((id<OWSMessageCollectionViewCell>)cell) setCellVisible:NO];
     }
 }
 
@@ -1157,7 +1253,11 @@ typedef enum : NSUInteger {
                 return self.outgoingMessageFailedImageData;
             case TSOutgoingMessageStateAttemptingOut:
                 return self.currentlyOutgoingBubbleImageData;
-            default:
+            case TSOutgoingMessageStateSent_OBSOLETE:
+            case TSOutgoingMessageStateDelivered_OBSOLETE:
+                OWSAssert(0);
+                return self.outgoingBubbleImageData;
+            case TSOutgoingMessageStateSentToService:
                 return self.outgoingBubbleImageData;
         }
     }
@@ -1225,6 +1325,11 @@ typedef enum : NSUInteger {
         DDLogError(@"%@ Unexpected cell type: %@", self.tag, cell);
         return cell;
     }
+
+    if ([message isMediaMessage] && [[message media] conformsToProtocol:@protocol(OWSMessageMediaAdapter)]) {
+        cell.mediaAdapter = (id<OWSMessageMediaAdapter>)[message media];
+    }
+
     [cell ows_didLoad];
     return cell;
 }
@@ -1240,6 +1345,11 @@ typedef enum : NSUInteger {
         DDLogError(@"%@ Unexpected cell type: %@", self.tag, cell);
         return cell;
     }
+
+    if ([message isMediaMessage] && [[message media] conformsToProtocol:@protocol(OWSMessageMediaAdapter)]) {
+        cell.mediaAdapter = (id<OWSMessageMediaAdapter>)[message media];
+    }
+
     [cell ows_didLoad];
 
     if (message.isMediaMessage) {
@@ -1464,13 +1574,10 @@ typedef enum : NSUInteger {
         if (outgoingMessage.messageState == TSOutgoingMessageStateUnsent) {
             return [[NSAttributedString alloc] initWithString:NSLocalizedString(@"MESSAGE_STATUS_FAILED",
                                                                                 @"message footer for failed messages")];
-        } else if (outgoingMessage.messageState == TSOutgoingMessageStateSent ||
-                   outgoingMessage.messageState == TSOutgoingMessageStateDelivered) {
-            NSString *text = (outgoingMessage.messageState == TSOutgoingMessageStateSent
-                              ? NSLocalizedString(@"MESSAGE_STATUS_SENT",
-                                                  @"message footer for sent messages")
-                              : NSLocalizedString(@"MESSAGE_STATUS_DELIVERED",
-                                                  @"message footer for delivered messages"));
+        } else if (outgoingMessage.messageState == TSOutgoingMessageStateSentToService) {
+            NSString *text = (outgoingMessage.wasDelivered
+                    ? NSLocalizedString(@"MESSAGE_STATUS_DELIVERED", @"message footer for delivered messages")
+                    : NSLocalizedString(@"MESSAGE_STATUS_SENT", @"message footer for sent messages"));
             NSAttributedString *result = [[NSAttributedString alloc] initWithString:text];
 
             // Show when it's the last message in the thread
@@ -1481,9 +1588,7 @@ typedef enum : NSUInteger {
 
             // Or when the next message is *not* an outgoing sent/delivered message.
             TSOutgoingMessage *nextMessage = [self nextOutgoingMessage:indexPath];
-            if (nextMessage &&
-                nextMessage.messageState != TSOutgoingMessageStateSent &&
-                nextMessage.messageState != TSOutgoingMessageStateDelivered) {
+            if (nextMessage && nextMessage.messageState != TSOutgoingMessageStateSentToService) {
                 [self updateLastDeliveredMessage:message];
                 return result;
             }
@@ -1607,7 +1712,7 @@ typedef enum : NSUInteger {
                                                              messageItem:messageItem
                                                              isAnimated:NO];
 
-                            [vc presentFromViewController:self.navigationController];
+                            [vc presentFromViewController:self];
                         }
                     }
                 } else if ([[messageItem media] isKindOfClass:[TSAnimatedAdapter class]]) {
@@ -1636,14 +1741,13 @@ typedef enum : NSUInteger {
                                                                  forInteraction:interaction
                                                                     messageItem:messageItem
                                                                      isAnimated:YES];
-                            [vc presentFromViewController:self.navigationController];
+                            [vc presentFromViewController:self];
                         }
                     }
                 } else if ([[messageItem media] isKindOfClass:[TSVideoAttachmentAdapter class]]) {
                     // fileurl disappeared should look up in db as before. will do refactor
                     // full screen, check this setup with a .mov
                     TSVideoAttachmentAdapter *messageMedia = (TSVideoAttachmentAdapter *)[messageItem media];
-                    _currentMediaAdapter                   = messageMedia;
                     __block TSAttachment *attachment       = nil;
                     [self.uiDatabaseConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
                       attachment =
@@ -1656,7 +1760,8 @@ typedef enum : NSUInteger {
                         if ([messageMedia isVideo]) {
                             if ([fileManager fileExistsAtPath:[attStream.mediaURL path]]) {
                                 [self dismissKeyBoard];
-                                _videoPlayer = [[MPMoviePlayerController alloc] initWithContentURL:attStream.mediaURL];
+                                self.videoPlayer =
+                                    [[MPMoviePlayerController alloc] initWithContentURL:attStream.mediaURL];
                                 [_videoPlayer prepareToPlay];
 
                                 [[NSNotificationCenter defaultCenter] addObserver:self
@@ -1678,90 +1783,49 @@ typedef enum : NSUInteger {
                                 [_videoPlayer setFullscreen:YES animated:NO];
                             }
                         } else if ([messageMedia isAudio]) {
-                            if (messageMedia.isAudioPlaying) {
-                                // if you had started playing an audio msg and now you're tapping it to pause
-                                messageMedia.isAudioPlaying = NO;
-                                [_audioPlayer pause];
-                                messageMedia.isPaused = YES;
-                                [_audioPlayerPoller invalidate];
-                                double current = [_audioPlayer currentTime] / [_audioPlayer duration];
-                                [messageMedia setAudioProgressFromFloat:(float)current];
-                                [messageMedia setAudioIconToPlay];
-                            } else {
-                                BOOL isResuming = NO;
-                                [_audioPlayerPoller invalidate];
-
-                                // loop through all the other bubbles and set their isPlaying to false
-                                NSInteger num_bubbles = [self collectionView:collectionView numberOfItemsInSection:0];
-                                for (NSInteger i = 0; i < num_bubbles; i++) {
-                                    NSIndexPath *indexPathI = [NSIndexPath indexPathForRow:i inSection:0];
-                                    id<OWSMessageData> message = [self messageAtIndexPath:indexPathI];
-
-                                    if (message.messageType == TSIncomingMessageAdapter && message.isMediaMessage) {
-                                        TSVideoAttachmentAdapter *msgMedia
-                                            = (TSVideoAttachmentAdapter *)[message media];
-                                        if ([msgMedia isAudio]) {
-                                            if (msgMedia == messageMedia && messageMedia.isPaused) {
-                                                isResuming = YES;
-                                            } else {
-                                                msgMedia.isAudioPlaying = NO;
-                                                msgMedia.isPaused       = NO;
-                                                [msgMedia setAudioIconToPlay];
-                                                [msgMedia setAudioProgressFromFloat:0];
-                                                [msgMedia resetAudioDuration];
-                                            }
-                                        }
-                                    }
+                            if (self.audioAttachmentPlayer) {
+                                // Is this player associated with this media adapter?
+                                if (self.audioAttachmentPlayer.owner == messageMedia) {
+                                    // Tap to pause & unpause.
+                                    [self.audioAttachmentPlayer togglePlayState];
+                                    return;
                                 }
-
-                                if (isResuming) {
-                                    // if you had paused an audio msg and now you're tapping to resume
-                                    [_audioPlayer prepareToPlay];
-                                    [_audioPlayer play];
-                                    [messageMedia setAudioIconToPause];
-                                    messageMedia.isAudioPlaying = YES;
-                                    messageMedia.isPaused       = NO;
-                                    _audioPlayerPoller =
-                                        [NSTimer scheduledTimerWithTimeInterval:.05
-                                                                         target:self
-                                                                       selector:@selector(audioPlayerUpdated:)
-                                                                       userInfo:@{
-                                                                           @"adapter" : messageMedia
-                                                                       }
-                                                                        repeats:YES];
-                                } else {
-                                    // if you are tapping an audio msg for the first time to play
-                                    messageMedia.isAudioPlaying = YES;
-                                    NSError *error;
-                                    _audioPlayer =
-                                        [[AVAudioPlayer alloc] initWithContentsOfURL:attStream.mediaURL error:&error];
-                                    if (error) {
-                                        DDLogError(@"error: %@", error);
-                                    }
-                                    [_audioPlayer prepareToPlay];
-                                    [_audioPlayer play];
-                                    [messageMedia setAudioIconToPause];
-                                    _audioPlayer.delegate = self;
-                                    _audioPlayerPoller =
-                                        [NSTimer scheduledTimerWithTimeInterval:.05
-                                                                         target:self
-                                                                       selector:@selector(audioPlayerUpdated:)
-                                                                       userInfo:@{
-                                                                           @"adapter" : messageMedia
-                                                                       }
-                                                                        repeats:YES];
-                                }
+                                [self.audioAttachmentPlayer stop];
+                                self.audioAttachmentPlayer = nil;
                             }
+                            self.audioAttachmentPlayer =
+                                [[OWSAudioAttachmentPlayer alloc] initWithMediaAdapter:messageMedia
+                                                                    databaseConnection:self.uiDatabaseConnection];
+                            // Associate the player with this media adapter.
+                            self.audioAttachmentPlayer.owner = messageMedia;
+                            [self.audioAttachmentPlayer play];
                         }
                     }
+                } else if ([messageItem.media isKindOfClass:[AttachmentPointerAdapter class]]) {
+                    AttachmentPointerAdapter *attachmentPointerAdadpter = (AttachmentPointerAdapter *)messageItem.media;
+                    TSAttachmentPointer *attachmentPointer = attachmentPointerAdadpter.attachmentPointer;
+                    // Restart failed downloads
+                    if (attachmentPointer.state == TSAttachmentPointerStateFailed) {
+                        if (![interaction isKindOfClass:[TSMessage class]]) {
+                            DDLogError(@"%@ Expected attachment downloads from an instance of message, but found: %@", self.tag, interaction);
+                            OWSAssert(NO);
+                            return;
+                        }
+                        TSMessage *message = (TSMessage *)interaction;
+                        [self handleFailedDownloadTapForMessage:message attachmentPointer:attachmentPointer];
+                    } else {
+                        DDLogVerbose(@"%@ Ignoring tap for attachment pointer %@ with state %lu",
+                            self.tag,
+                            attachmentPointer,
+                            (unsigned long)attachmentPointer.state);
+                    }
+                } else {
+                    DDLogDebug(@"%@ Unhandled tap on 'media item' with media: %@", self.tag, messageItem.media);
                 }
             }
         } break;
         case TSErrorMessageAdapter:
             [self handleErrorMessageTap:(TSErrorMessage *)interaction];
-            break;
-        case TSInfoMessageAdapter:
-            [self handleWarningTap:interaction];
             break;
         case TSCallAdapter:
             break;
@@ -1794,41 +1858,6 @@ typedef enum : NSUInteger {
     }
 }
 
-- (void)handleWarningTap:(TSInteraction *)interaction
-{
-    if ([interaction isKindOfClass:[TSIncomingMessage class]]) {
-        TSIncomingMessage *message = (TSIncomingMessage *)interaction;
-
-        for (NSString *attachmentId in message.attachmentIds) {
-            __block TSAttachment *attachment;
-
-            [self.editingDatabaseConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
-              attachment = [TSAttachment fetchObjectWithUniqueID:attachmentId transaction:transaction];
-            }];
-
-            if ([attachment isKindOfClass:[TSAttachmentPointer class]]) {
-                TSAttachmentPointer *pointer = (TSAttachmentPointer *)attachment;
-
-                // FIXME possible for pointer to get stuck in isDownloading state if app is closed while downloading.
-                // see: https://github.com/WhisperSystems/Signal-iOS/issues/1254
-                if (pointer.state != TSAttachmentPointerStateDownloading) {
-                    OWSAttachmentsProcessor *processor =
-                        [[OWSAttachmentsProcessor alloc] initWithAttachmentPointer:pointer
-                                                                    networkManager:self.networkManager];
-                    [processor fetchAttachmentsForMessage:message
-                        success:^(TSAttachmentStream *_Nonnull attachmentStream) {
-                            DDLogInfo(
-                                @"%@ Successfully redownloaded attachment in thread: %@", self.tag, message.thread);
-                        }
-                        failure:^(NSError *_Nonnull error) {
-                            DDLogWarn(@"%@ Failed to redownload message with error: %@", self.tag, error);
-                        }];
-                }
-            }
-        }
-    }
-}
-
 // There's more than one way to exit the fullscreen video playback.
 // There's a done button, a "toggle fullscreen" button and I think
 // there's some gestures too.  These fire slightly different notifications.
@@ -1850,7 +1879,14 @@ typedef enum : NSUInteger {
 - (void)clearVideoPlayer {
     [_videoPlayer stop];
     [_videoPlayer.view removeFromSuperview];
-    _videoPlayer = nil;
+    self.videoPlayer = nil;
+}
+
+- (void)setVideoPlayer:(MPMoviePlayerController *)videoPlayer
+{
+    _videoPlayer = videoPlayer;
+
+    [ViewControllerUtils setAudioIgnoresHardwareMuteSwitch:videoPlayer != nil];
 }
 
 - (void)collectionView:(JSQMessagesCollectionView *)collectionView
@@ -1933,6 +1969,50 @@ typedef enum : NSUInteger {
 
 #pragma mark Bubble User Actions
 
+- (void)handleFailedDownloadTapForMessage:(TSMessage *)message
+                        attachmentPointer:(TSAttachmentPointer *)attachmentPointer
+{
+    UIAlertController *actionSheetController = [UIAlertController
+        alertControllerWithTitle:NSLocalizedString(@"MESSAGES_VIEW_FAILED_DOWNLOAD_ACTIONSHEET_TITLE", comment
+                                                   : "Action sheet title after tapping on failed download.")
+                         message:nil
+                  preferredStyle:UIAlertControllerStyleActionSheet];
+
+    UIAlertAction *dismissAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"TXT_CANCEL_TITLE", @"")
+                                                            style:UIAlertActionStyleCancel
+                                                          handler:nil];
+    [actionSheetController addAction:dismissAction];
+
+    UIAlertAction *deleteMessageAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"TXT_DELETE_TITLE", @"")
+                                                                  style:UIAlertActionStyleDestructive
+                                                                handler:^(UIAlertAction *_Nonnull action) {
+                                                                    [message remove];
+                                                                }];
+    [actionSheetController addAction:deleteMessageAction];
+
+    UIAlertAction *resendMessageAction = [UIAlertAction
+        actionWithTitle:NSLocalizedString(@"MESSAGES_VIEW_FAILED_DOWNLOAD_RETRY_ACTION", @"Action sheet button text")
+                  style:UIAlertActionStyleDefault
+                handler:^(UIAlertAction *_Nonnull action) {
+                    OWSAttachmentsProcessor *processor =
+                        [[OWSAttachmentsProcessor alloc] initWithAttachmentPointer:attachmentPointer
+                                                                    networkManager:self.networkManager];
+                    [processor fetchAttachmentsForMessage:message
+                        success:^(TSAttachmentStream *_Nonnull attachmentStream) {
+                            DDLogInfo(
+                                @"%@ Successfully redownloaded attachment in thread: %@", self.tag, message.thread);
+                        }
+                        failure:^(NSError *_Nonnull error) {
+                            DDLogWarn(@"%@ Failed to redownload message with error: %@", self.tag, error);
+                        }];
+                }];
+
+    [actionSheetController addAction:resendMessageAction];
+
+    [self presentViewController:actionSheetController animated:YES completion:nil];
+}
+
+
 - (void)handleUnsentMessageTap:(TSOutgoingMessage *)message {
     UIAlertController *actionSheetController = [UIAlertController alertControllerWithTitle:message.mostRecentFailureText
                                                                                    message:nil
@@ -1971,6 +2051,8 @@ typedef enum : NSUInteger {
 {
     if ([message isKindOfClass:[TSInvalidIdentityKeyErrorMessage class]]) {
         [self tappedInvalidIdentityKeyErrorMessage:(TSInvalidIdentityKeyErrorMessage *)message];
+    } else if ([message isKindOfClass:[OWSUnknownContactBlockOfferMessage class]]) {
+        [self tappedUnknownContactBlockOfferMessage:(OWSUnknownContactBlockOfferMessage *)message];
     } else if (message.errorType == TSErrorMessageInvalidMessage) {
         [self tappedCorruptedMessage:message];
     } else {
@@ -2018,46 +2100,193 @@ typedef enum : NSUInteger {
     NSString *titleFormat = NSLocalizedString(@"SAFETY_NUMBERS_ACTIONSHEET_TITLE", @"Action sheet heading");
     NSString *titleText = [NSString stringWithFormat:titleFormat, keyOwner];
 
-    UIAlertController *actionSheetController = [UIAlertController alertControllerWithTitle:titleText
-                                                                             message:nil
-                                                                      preferredStyle:UIAlertControllerStyleActionSheet];
-    
+    UIAlertController *actionSheetController =
+        [UIAlertController alertControllerWithTitle:titleText
+                                            message:nil
+                                     preferredStyle:UIAlertControllerStyleActionSheet];
+
     UIAlertAction *dismissAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"TXT_CANCEL_TITLE", @"")
                                                             style:UIAlertActionStyleCancel
                                                           handler:nil];
     [actionSheetController addAction:dismissAction];
 
-    UIAlertAction *showSafteyNumberAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"SHOW_SAFETY_NUMBER_ACTION", @"Action sheet item")
-                                                                      style:UIAlertActionStyleDefault
-                                                                    handler:^(UIAlertAction * _Nonnull action) {
-                                                                        DDLogInfo(@"%@ Remote Key Changed actions: Show fingerprint display", self.tag);
-                                                                        [self showFingerprintWithTheirIdentityKey:errorMessage.newIdentityKey
-                                                                                                    theirSignalId:errorMessage.theirSignalId];
-                                                                    }];
+    UIAlertAction *showSafteyNumberAction =
+        [UIAlertAction actionWithTitle:NSLocalizedString(@"SHOW_SAFETY_NUMBER_ACTION", @"Action sheet item")
+                                 style:UIAlertActionStyleDefault
+                               handler:^(UIAlertAction *_Nonnull action) {
+                                   DDLogInfo(@"%@ Remote Key Changed actions: Show fingerprint display", self.tag);
+                                   [self showFingerprintWithTheirIdentityKey:errorMessage.newIdentityKey
+                                                               theirSignalId:errorMessage.theirSignalId];
+                               }];
     [actionSheetController addAction:showSafteyNumberAction];
-    
-    UIAlertAction *acceptSafetyNumberAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"ACCEPT_NEW_IDENTITY_ACTION", @"Action sheet item")
-                                                                        style:UIAlertActionStyleDefault
-                                                                      handler:^(UIAlertAction * _Nonnull action) {
-                                                                          DDLogInfo(@"%@ Remote Key Changed actions: Accepted new identity key", self.tag);
-                                                                          [errorMessage acceptNewIdentityKey];
-                                                                          if ([errorMessage isKindOfClass:[TSInvalidIdentityKeySendingErrorMessage class]]) {
-                                                                              [self.messageSender
-                                                                               resendMessageFromKeyError:(TSInvalidIdentityKeySendingErrorMessage *)
-                                                                               errorMessage
-                                                                               success:^{
-                                                                                   DDLogDebug(@"%@ Successfully resent key-error message.", self.tag);
-                                                                               }
-                                                                               failure:^(NSError *_Nonnull error) {
-                                                                                   DDLogError(@"%@ Failed to resend key-error message with error:%@",
-                                                                                              self.tag,
-                                                                                              error);
-                                                                               }];
-                                                                          }
-                                                                      }];
+
+    UIAlertAction *acceptSafetyNumberAction = [UIAlertAction
+        actionWithTitle:NSLocalizedString(@"ACCEPT_NEW_IDENTITY_ACTION", @"Action sheet item")
+                  style:UIAlertActionStyleDefault
+                handler:^(UIAlertAction *_Nonnull action) {
+                    DDLogInfo(@"%@ Remote Key Changed actions: Accepted new identity key", self.tag);
+                    [errorMessage acceptNewIdentityKey];
+                    if ([errorMessage isKindOfClass:[TSInvalidIdentityKeySendingErrorMessage class]]) {
+                        [self.messageSender
+                            resendMessageFromKeyError:(TSInvalidIdentityKeySendingErrorMessage *)errorMessage
+                            success:^{
+                                DDLogDebug(@"%@ Successfully resent key-error message.", self.tag);
+                            }
+                            failure:^(NSError *_Nonnull error) {
+                                DDLogError(@"%@ Failed to resend key-error message with error:%@", self.tag, error);
+                            }];
+                    }
+                }];
     [actionSheetController addAction:acceptSafetyNumberAction];
     
     [self presentViewController:actionSheetController animated:YES completion:nil];
+}
+
+- (void)tappedUnknownContactBlockOfferMessage:(OWSUnknownContactBlockOfferMessage *)errorMessage
+{
+    NSString *displayName = [self.contactsManager displayNameForPhoneIdentifier:errorMessage.contactId];
+    NSString *title =
+        [NSString stringWithFormat:NSLocalizedString(@"BLOCK_OFFER_ACTIONSHEET_TITLE_FORMAT",
+                                       @"Title format for action sheet that offers to block an unknown user."
+                                       @"Embeds {{the unknown user's name or phone number}}."),
+                  [BlockListUIUtils formatDisplayNameForAlertTitle:displayName]];
+
+    UIAlertController *actionSheetController =
+        [UIAlertController alertControllerWithTitle:title message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+
+    UIAlertAction *dismissAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"TXT_CANCEL_TITLE", @"")
+                                                            style:UIAlertActionStyleCancel
+                                                          handler:nil];
+    [actionSheetController addAction:dismissAction];
+
+    UIAlertAction *blockAction =
+        [UIAlertAction actionWithTitle:NSLocalizedString(@"BLOCK_OFFER_ACTIONSHEET_BLOCK_ACTION",
+                                           @"Action sheet that will block an unknown user.")
+                                 style:UIAlertActionStyleDestructive
+                               handler:^(UIAlertAction *_Nonnull action) {
+                                   DDLogInfo(@"%@ Blocking an unknown user.", self.tag);
+                                   [self.blockingManager addBlockedPhoneNumber:errorMessage.contactId];
+                                   // Delete the block offer.
+                                   [self.storageManager.dbConnection
+                                       readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
+                                           [errorMessage removeWithTransaction:transaction];
+                                       }];
+                               }];
+    [actionSheetController addAction:blockAction];
+
+    [self presentViewController:actionSheetController animated:YES completion:nil];
+}
+
+
+#pragma mark - Attachment Picking: Documents
+
+- (void)showAttachmentDocumentPicker
+{
+    NSString *allItems = (__bridge NSString *)kUTTypeItem;
+    NSArray<NSString *> *documentTypes = @[ allItems ];
+    // UIDocumentPickerModeImport copies to a temp file within our container.
+    // It uses more memory than "open" but lets us avoid working with security scoped URLs.
+    UIDocumentPickerMode pickerMode = UIDocumentPickerModeImport;
+    UIDocumentMenuViewController *menuController =
+        [[UIDocumentMenuViewController alloc] initWithDocumentTypes:documentTypes inMode:pickerMode];
+    menuController.delegate = self;
+    [self presentViewController:menuController animated:YES completion:nil];
+}
+
+#pragma mark UIDocumentMenuDelegate
+
+- (void)documentMenu:(UIDocumentMenuViewController *)documentMenu
+    didPickDocumentPicker:(UIDocumentPickerViewController *)documentPicker
+{
+    documentPicker.delegate = self;
+    [self presentViewController:documentPicker animated:YES completion:nil];
+}
+
+#pragma mark UIDocumentPickerDelegate
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentAtURL:(NSURL *)url
+{
+    DDLogDebug(@"%@ Picked document at url: %@", self.tag, url);
+    NSData *attachmentData = [NSData dataWithContentsOfURL:url];
+
+    NSString *type;
+    NSError *typeError;
+    [url getResourceValue:&type forKey:NSURLTypeIdentifierKey error:&typeError];
+    if (typeError) {
+        DDLogError(
+            @"%@ Determining type of picked document at url: %@ failed with error: %@", self.tag, url, typeError);
+        OWSAssert(NO);
+    }
+
+    NSNumber *isDirectory;
+    NSError *isDirectoryError;
+    [url getResourceValue:&isDirectory forKey:NSURLIsDirectoryKey error:&isDirectoryError];
+    if (isDirectoryError) {
+        DDLogError(@"%@ Determining if picked document at url: %@ was a directory failed with error: %@",
+            self.tag,
+            url,
+            isDirectoryError);
+        OWSAssert(NO);
+    } else if ([isDirectory boolValue]) {
+        DDLogInfo(@"%@ User picked directory at url: %@", self.tag, url);
+        UIAlertController *alertController = [UIAlertController
+            alertControllerWithTitle:
+                NSLocalizedString(@"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_TITLE",
+                    @"Alert title when picking a document fails because user picked a directory/bundle")
+                             message:
+                                 NSLocalizedString(@"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_BODY",
+                                     @"Alert body when picking a document fails because user picked a directory/bundle")
+                      preferredStyle:UIAlertControllerStyleAlert];
+
+        UIAlertAction *dismissAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"DISMISS_BUTTON_TEXT", nil)
+                                                                style:UIAlertActionStyleCancel
+                                                              handler:nil];
+        [alertController addAction:dismissAction];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self presentViewController:alertController animated:YES completion:nil];
+        });
+        return;
+    }
+
+    if (!type) {
+        DDLogDebug(@"%@ falling back to default filetype for picked document at url: %@", self.tag, url);
+        OWSAssert(NO);
+        type = (__bridge NSString *)kUTTypeData;
+    }
+
+    NSString *filename = url.lastPathComponent;
+    if (!filename) {
+        DDLogDebug(@"%@ Unable to determine filename from url: %@", self.tag, url);
+        OWSAssert(NO);
+        filename = NSLocalizedString(
+            @"ATTACHMENT_DEFAULT_FILENAME", @"Generic filename for an attachment with no known name");
+    }
+
+    if (!attachmentData || attachmentData.length == 0) {
+        DDLogError(@"%@ attachment data was unexpectedly empty for picked document url: %@", self.tag, url);
+        OWSAssert(NO);
+        UIAlertController *alertController = [UIAlertController
+            alertControllerWithTitle:NSLocalizedString(@"ATTACHMENT_PICKER_DOCUMENTS_FAILED_ALERT_TITLE",
+                                         @"Alert title when picking a document fails for an unknown reason")
+                             message:nil
+                      preferredStyle:UIAlertControllerStyleAlert];
+
+        UIAlertAction *dismissAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"DISMISS_BUTTON_TEXT", nil)
+                                                                style:UIAlertActionStyleCancel
+                                                              handler:nil];
+        [alertController addAction:dismissAction];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self presentViewController:alertController animated:YES completion:nil];
+        });
+        return;
+    }
+
+    OWSAssert(attachmentData);
+    OWSAssert(type);
+    OWSAssert(filename);
+    SignalAttachment *attachment = [SignalAttachment attachmentWithData:attachmentData dataUTI:type filename:filename];
+    [self tryToSendAttachmentIfApproved:attachment];
 }
 
 #pragma mark - UIImagePickerController
@@ -2115,10 +2344,36 @@ typedef enum : NSUInteger {
 - (void)imagePickerController:(UIImagePickerController *)picker
     didFinishPickingMediaWithInfo:(NSDictionary<NSString *, id> *)info
 {
-    OWSAssert([NSThread isMainThread]);
-    
     [UIUtil modalCompletionBlock]();
     [self resetFrame];
+
+    NSURL *referenceURL = [info valueForKey:UIImagePickerControllerReferenceURL];
+    if (!referenceURL) {
+        DDLogVerbose(@"Could not retrieve reference URL for picked asset");
+        [self imagePickerController:picker didFinishPickingMediaWithInfo:info filename:nil];
+        return;
+    }
+
+    ALAssetsLibraryAssetForURLResultBlock resultblock = ^(ALAsset *imageAsset) {
+        ALAssetRepresentation *imageRep = [imageAsset defaultRepresentation];
+        NSString *filename = [imageRep filename];
+        [self imagePickerController:picker didFinishPickingMediaWithInfo:info filename:filename];
+    };
+
+    ALAssetsLibrary *assetslibrary = [[ALAssetsLibrary alloc] init];
+    [assetslibrary assetForURL:referenceURL
+                   resultBlock:resultblock
+                  failureBlock:^(NSError *error) {
+                      DDLogError(@"Error retrieving filename for asset: %@", error);
+                      OWSAssert(0);
+                  }];
+}
+
+- (void)imagePickerController:(UIImagePickerController *)picker
+    didFinishPickingMediaWithInfo:(NSDictionary<NSString *, id> *)info
+                         filename:(NSString *)filename
+{
+    OWSAssert([NSThread isMainThread]);
 
     void (^failedToPickAttachment)(NSError *error) = ^void(NSError *error) {
         DDLogError(@"failed to pick attachment with error: %@", error);
@@ -2131,20 +2386,22 @@ typedef enum : NSUInteger {
         NSURL *videoURL = info[UIImagePickerControllerMediaURL];
         [self dismissViewControllerAnimated:YES
                                  completion:^{
-                                     [self sendQualityAdjustedAttachmentForVideo:videoURL];
+                                     [self sendQualityAdjustedAttachmentForVideo:videoURL filename:filename];
                                  }];
     } else if (picker.sourceType == UIImagePickerControllerSourceTypeCamera) {
         // Static Image captured from camera
 
         UIImage *imageFromCamera = [info[UIImagePickerControllerOriginalImage] normalizedImage];
-        
+
         [self dismissViewControllerAnimated:YES
                                  completion:^{
                                      OWSAssert([NSThread isMainThread]);
                                      
                                      if (imageFromCamera) {
-                                         SignalAttachment *attachment = [SignalAttachment imageAttachmentWithImage:imageFromCamera
-                                                                                                           dataUTI:(NSString *) kUTTypeJPEG];
+                                         SignalAttachment *attachment =
+                                             [SignalAttachment imageAttachmentWithImage:imageFromCamera
+                                                                                dataUTI:(NSString *)kUTTypeJPEG
+                                                                               filename:filename];
                                          if (!attachment ||
                                              [attachment hasError]) {
                                              DDLogWarn(@"%@ %s Invalid attachment: %@.",
@@ -2154,7 +2411,7 @@ typedef enum : NSUInteger {
                                              [self showErrorAlertForAttachment:attachment];
                                              failedToPickAttachment(nil);
                                          } else {
-                                             [self sendMessageAttachment:attachment];
+                                             [self tryToSendAttachmentIfApproved:attachment];
                                          }
                                      } else {
                                          failedToPickAttachment(nil);
@@ -2186,9 +2443,9 @@ typedef enum : NSUInteger {
                  return failedToPickAttachment(assetFetchingError);
              }
              OWSAssert([NSThread isMainThread]);
-             
-             SignalAttachment *attachment = [SignalAttachment imageAttachmentWithData:imageData
-                                                                              dataUTI:dataUTI];
+
+             SignalAttachment *attachment =
+                 [SignalAttachment attachmentWithData:imageData dataUTI:dataUTI filename:filename];
              [self dismissViewControllerAnimated:YES
                                       completion:^{
                                           OWSAssert([NSThread isMainThread]);
@@ -2201,7 +2458,7 @@ typedef enum : NSUInteger {
                                               [self showErrorAlertForAttachment:attachment];
                                               failedToPickAttachment(nil);
                                           } else {
-                                              [self sendMessageAttachment:attachment];
+                                              [self tryToSendAttachmentIfApproved:attachment];
                                           }
                                       }];
          }];
@@ -2210,35 +2467,16 @@ typedef enum : NSUInteger {
 
 - (void)sendMessageAttachment:(SignalAttachment *)attachment
 {
+    OWSAssert([NSThread isMainThread]);
     // TODO: Should we assume non-nil or should we check for non-nil?
     OWSAssert(attachment != nil);
     OWSAssert(![attachment hasError]);
     OWSAssert([attachment mimeType].length > 0);
-    
-    DispatchMainThreadSafe(^{
-        DDLogVerbose(@"Sending attachment. Size in bytes: %lu, contentType: %@",
-                     (unsigned long)attachment.data.length,
-                     [attachment mimeType]);
-        [ThreadUtil sendMessageWithAttachment:attachment
-                                     inThread:self.thread
-                                messageSender:self.messageSender];
 
-        TSOutgoingMessage *message;
-        OWSDisappearingMessagesConfiguration *configuration =
-        [OWSDisappearingMessagesConfiguration fetchObjectWithUniqueID:self.thread.uniqueId];
-        if (configuration.isEnabled) {
-            message = [[TSOutgoingMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
-                                                          inThread:self.thread
-                                                       messageBody:nil
-                                                     attachmentIds:[NSMutableArray new]
-                                                  expiresInSeconds:configuration.durationSeconds];
-        } else {
-            message = [[TSOutgoingMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
-                                                          inThread:self.thread
-                                                       messageBody:nil
-                                                     attachmentIds:[NSMutableArray new]];
-        }
-    });
+    DDLogVerbose(@"Sending attachment. Size in bytes: %lu, contentType: %@",
+        (unsigned long)attachment.data.length,
+        [attachment mimeType]);
+    [ThreadUtil sendMessageWithAttachment:attachment inThread:self.thread messageSender:self.messageSender];
 }
 
 - (NSURL *)videoTempFolder {
@@ -2254,7 +2492,8 @@ typedef enum : NSUInteger {
     return [NSURL fileURLWithPath:basePath];
 }
 
-- (void)sendQualityAdjustedAttachmentForVideo:(NSURL *)movieURL {
+- (void)sendQualityAdjustedAttachmentForVideo:(NSURL *)movieURL filename:(NSString *)filename
+{
     AVAsset *video = [AVAsset assetWithURL:movieURL];
     AVAssetExportSession *exportSession =
         [AVAssetExportSession exportSessionWithAsset:video presetName:AVAssetExportPresetMediumQuality];
@@ -2269,24 +2508,25 @@ typedef enum : NSUInteger {
     exportSession.outputURL = compressedVideoUrl;
     [exportSession exportAsynchronouslyWithCompletionHandler:^{
         NSData *videoData = [NSData dataWithContentsOfURL:compressedVideoUrl];
-        SignalAttachment *attachment = [SignalAttachment videoAttachmentWithData:videoData
-                                                                         dataUTI:(NSString *) kUTTypeMPEG4];
-        if (!attachment ||
-            [attachment hasError]) {
-            DDLogWarn(@"%@ %s Invalid attachment: %@.",
-                      self.tag,
-                      __PRETTY_FUNCTION__,
-                      attachment ? [attachment errorName] : @"Missing data");
-            [self showErrorAlertForAttachment:attachment];
-        } else {
-            [self sendMessageAttachment:attachment];
-        }
-        
-        NSError *error;
-        [[NSFileManager defaultManager] removeItemAtURL:compressedVideoUrl error:&error];
-        if (error) {
-            DDLogWarn(@"Failed to remove cached video file: %@", error.debugDescription);
-        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            SignalAttachment *attachment =
+                [SignalAttachment attachmentWithData:videoData dataUTI:(NSString *)kUTTypeMPEG4 filename:filename];
+            if (!attachment || [attachment hasError]) {
+                DDLogWarn(@"%@ %s Invalid attachment: %@.",
+                    self.tag,
+                    __PRETTY_FUNCTION__,
+                    attachment ? [attachment errorName] : @"Missing data");
+                [self showErrorAlertForAttachment:attachment];
+            } else {
+                [self tryToSendAttachmentIfApproved:attachment];
+            }
+
+            NSError *error;
+            [[NSFileManager defaultManager] removeItemAtURL:compressedVideoUrl error:&error];
+            if (error) {
+                DDLogWarn(@"Failed to remove cached video file: %@", error.debugDescription);
+            }
+        });
     }];
 }
 
@@ -2318,7 +2558,8 @@ typedef enum : NSUInteger {
     // models in order to jump to the most recent commit.
     NSArray *notifications = [self.uiDatabaseConnection beginLongLivedReadTransaction];
 
-    [self updateBackButtonAsync];
+    [self updateBackButtonUnreadCount];
+    [self updateNavigationBarSubtitleLabel];
 
     if (isGroupConversation) {
         [self.uiDatabaseConnection readWithBlock:^(YapDatabaseReadTransaction *transaction) {
@@ -2357,7 +2598,6 @@ typedef enum : NSUInteger {
         return;
     }
     
-    __block BOOL scrollToBottom = NO;
     const CGFloat kIsAtBottomTolerancePts = 5;
     BOOL wasAtBottom = (self.collectionView.contentOffset.y +
                         self.collectionView.bounds.size.height +
@@ -2367,7 +2607,12 @@ typedef enum : NSUInteger {
     // update is a new outgoing message AND we're already scrolled to
     // the bottom of the conversation, skip the scroll animation.
     __block BOOL shouldAnimateScrollToBottom = !wasAtBottom;
-    
+    // We want to scroll to the bottom if the user:
+    //
+    // a) already was at the bottom of the conversation.
+    // b) is inserting new interactions.
+    __block BOOL scrollToBottom = wasAtBottom;
+
     [self.collectionView performBatchUpdates:^{
       for (YapDatabaseViewRowChange *rowChange in messageRowChanges) {
           switch (rowChange.type) {
@@ -2488,25 +2733,11 @@ typedef enum : NSUInteger {
     [_audioRecorder prepareToRecord];
 }
 
-- (void)audioPlayerUpdated:(NSTimer *)timer {
-    double current  = [_audioPlayer currentTime] / [_audioPlayer duration];
-    double interval = [_audioPlayer duration] - [_audioPlayer currentTime];
-    [_currentMediaAdapter setDurationOfAudio:interval];
-    [_currentMediaAdapter setAudioProgressFromFloat:(float)current];
-}
-
-- (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag {
-    [_audioPlayerPoller invalidate];
-    [_currentMediaAdapter setAudioProgressFromFloat:0];
-    [_currentMediaAdapter setDurationOfAudio:_audioPlayer.duration];
-    [_currentMediaAdapter setAudioIconToPlay];
-}
-
 - (void)audioRecorderDidFinishRecording:(AVAudioRecorder *)recorder successfully:(BOOL)flag {
     if (flag) {
         NSData *audioData = [NSData dataWithContentsOfURL:recorder.url];
-        SignalAttachment *attachment = [SignalAttachment audioAttachmentWithData:audioData
-                                                                         dataUTI:(NSString *) kUTTypeMPEG4Audio];
+        SignalAttachment *attachment =
+            [SignalAttachment attachmentWithData:audioData dataUTI:(NSString *)kUTTypeMPEG4Audio filename:nil];
         if (!attachment ||
             [attachment hasError]) {
             DDLogWarn(@"%@ %s Invalid attachment: %@.",
@@ -2515,7 +2746,7 @@ typedef enum : NSUInteger {
                       attachment ? [attachment errorName] : @"Missing data");
             [self showErrorAlertForAttachment:attachment];
         } else {
-            [self sendMessageAttachment:attachment];
+            [self tryToSendAttachmentIfApproved:attachment];
         }
     }
 }
@@ -2548,6 +2779,9 @@ typedef enum : NSUInteger {
                                                             handler:^(UIAlertAction * _Nonnull action) {
                                                                 [self takePictureOrVideo];
                                                             }];
+    UIImage *takeMediaImage = [UIImage imageNamed:@"actionsheet_camera_black"];
+    OWSAssert(takeMediaImage);
+    [takeMediaAction setValue:takeMediaImage forKey:@"image"];
     [actionSheetController addAction:takeMediaAction];
 
     UIAlertAction *chooseMediaAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"MEDIA_FROM_LIBRARY_BUTTON", @"media picker option to choose from library")
@@ -2555,8 +2789,23 @@ typedef enum : NSUInteger {
                                          handler:^(UIAlertAction * _Nonnull action) {
                                              [self chooseFromLibrary];
                                          }];
+    UIImage *chooseMediaImage = [UIImage imageNamed:@"actionsheet_camera_roll_black"];
+    OWSAssert(chooseMediaImage);
+    [chooseMediaAction setValue:chooseMediaImage forKey:@"image"];
     [actionSheetController addAction:chooseMediaAction];
-    
+
+    UIAlertAction *chooseDocumentAction =
+        [UIAlertAction actionWithTitle:NSLocalizedString(@"MEDIA_FROM_DOCUMENT_PICKER_BUTTON",
+                                           @"action sheet button title when choosing attachment type")
+                                 style:UIAlertActionStyleDefault
+                               handler:^(UIAlertAction *_Nonnull action) {
+                                   [self showAttachmentDocumentPicker];
+                               }];
+    UIImage *chooseDocumentImage = [UIImage imageNamed:@"actionsheet_document_black"];
+    OWSAssert(chooseDocumentImage);
+    [chooseDocumentAction setValue:chooseDocumentImage forKey:@"image"];
+    [actionSheetController addAction:chooseDocumentAction];
+
     [self presentViewController:actionSheetController animated:true completion:nil];
 }
 
@@ -2600,15 +2849,14 @@ typedef enum : NSUInteger {
         [groupThread saveWithTransaction:transaction];
         message = [[TSOutgoingMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
                                                       inThread:groupThread
-                                                   messageBody:@""
-                                                 attachmentIds:[NSMutableArray new]];
-        message.groupMetaMessage = TSGroupMessageUpdate;
-        message.customMessage = updateGroupInfo;
+                                              groupMetaMessage:TSGroupMessageUpdate];
+        [message updateWithCustomMessage:updateGroupInfo transaction:transaction];
     }];
 
     if (newGroupModel.groupImage) {
         [self.messageSender sendAttachmentData:UIImagePNGRepresentation(newGroupModel.groupImage)
             contentType:OWSMimeTypeImagePng
+            filename:nil
             inMessage:message
             success:^{
                 DDLogDebug(@"%@ Successfully sent group update with avatar", self.tag);
@@ -2677,57 +2925,26 @@ typedef enum : NSUInteger {
 
 #pragma mark Unread Badge
 
-- (void)setUnreadCount:(NSUInteger)unreadCount {
-    if (_unreadCount != unreadCount) {
-        _unreadCount = unreadCount;
+- (void)updateBackButtonUnreadCount
+{
+    AssertIsOnMainThread();
+    self.backButtonUnreadCount = [self.messagesManager unreadMessagesCountExcept:self.thread];
+}
 
-        if (_unreadCount > 0) {
-            if (_unreadContainer == nil) {
-                static UIImage *backgroundImage = nil;
-                static dispatch_once_t onceToken;
-                dispatch_once(&onceToken, ^{
-                  UIGraphicsBeginImageContextWithOptions(CGSizeMake(17.0f, 17.0f), false, 0.0f);
-                  CGContextRef context = UIGraphicsGetCurrentContext();
-                  CGContextSetFillColorWithColor(context, [UIColor redColor].CGColor);
-                  CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, 17.0f, 17.0f));
-                  backgroundImage =
-                      [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:8 topCapHeight:8];
-                  UIGraphicsEndImageContext();
-                });
-
-                _unreadContainer = [[UIImageView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, 10.0f, 10.0f)];
-                _unreadContainer.userInteractionEnabled = NO;
-                _unreadContainer.layer.zPosition        = 2000;
-                [self.navigationController.navigationBar addSubview:_unreadContainer];
-
-                _unreadBackground = [[UIImageView alloc] initWithImage:backgroundImage];
-                [_unreadContainer addSubview:_unreadBackground];
-
-                _unreadLabel                 = [[UILabel alloc] init];
-                _unreadLabel.backgroundColor = [UIColor clearColor];
-                _unreadLabel.textColor       = [UIColor whiteColor];
-                _unreadLabel.font            = [UIFont systemFontOfSize:12];
-                [_unreadContainer addSubview:_unreadLabel];
-            }
-            _unreadContainer.hidden = false;
-
-            _unreadLabel.text = [NSString stringWithFormat:@"%lu", (unsigned long)unreadCount];
-            [_unreadLabel sizeToFit];
-
-            CGPoint offset = CGPointMake(17.0f, 2.0f);
-
-            _unreadBackground.frame =
-                CGRectMake(offset.x, offset.y, MAX(_unreadLabel.frame.size.width + 8.0f, 17.0f), 17.0f);
-            _unreadLabel.frame = CGRectMake(offset.x
-                    + (CGFloat)floor(
-                          (2.0 * (_unreadBackground.frame.size.width - _unreadLabel.frame.size.width) / 2.0f) / 2.0f),
-                offset.y + 1.0f,
-                _unreadLabel.frame.size.width,
-                _unreadLabel.frame.size.height);
-        } else if (_unreadContainer != nil) {
-            _unreadContainer.hidden = true;
-        }
+- (void)setBackButtonUnreadCount:(NSUInteger)unreadCount
+{
+    AssertIsOnMainThread();
+    if (_backButtonUnreadCount == unreadCount) {
+        // No need to re-render same count.
+        return;
     }
+    _backButtonUnreadCount = unreadCount;
+
+    OWSAssert(_backButtonUnreadCountView != nil);
+    _backButtonUnreadCountView.hidden = unreadCount <= 0;
+
+    OWSAssert(_backButtonUnreadCountLabel != nil);
+    _backButtonUnreadCountLabel.text = [NSString stringWithFormat:@"%lu", (unsigned long)unreadCount];
 }
 
 #pragma mark 3D Touch Preview Actions
@@ -2767,34 +2984,42 @@ typedef enum : NSUInteger {
                self.tag,
                __PRETTY_FUNCTION__);
 
-    if ([self isBlockedContactConversation]) {
-        __weak MessagesViewController *weakSelf = self;
-        [self showUnblockContactUI:^(BOOL isBlocked) {
-            if (!isBlocked) {
-                [weakSelf didPasteAttachment:attachment];
-            }
-        }];
-        return;
-    }
+    [self tryToSendAttachmentIfApproved:attachment];
+}
 
-    if (attachment == nil ||
-        [attachment hasError]) {
-        DDLogWarn(@"%@ %s Invalid attachment: %@.",
-                  self.tag,
-                  __PRETTY_FUNCTION__,
-                  attachment ? [attachment errorName] : @"Missing data");
-        [self showErrorAlertForAttachment:attachment];
-    } else {
-        __weak MessagesViewController *weakSelf = self;
-        UIViewController *viewController = [[AttachmentApprovalViewController alloc] initWithAttachment:attachment
-                                                                                      successCompletion:^{
-                                                                                          [weakSelf sendMessageAttachment:attachment];
-                                                                                      }];
-        UINavigationController *navigationController = [[UINavigationController alloc] initWithRootViewController:viewController];
-        [self.navigationController presentViewController:navigationController
-                                                animated:YES
-                                              completion:nil];
-    }
+- (void)tryToSendAttachmentIfApproved:(SignalAttachment *_Nullable)attachment
+{
+    DDLogError(@"%@ %s", self.tag, __PRETTY_FUNCTION__);
+
+    DispatchMainThreadSafe(^{
+        if ([self isBlockedContactConversation]) {
+            __weak MessagesViewController *weakSelf = self;
+            [self showUnblockContactUI:^(BOOL isBlocked) {
+                if (!isBlocked) {
+                    [weakSelf tryToSendAttachmentIfApproved:attachment];
+                }
+            }];
+            return;
+        }
+
+        if (attachment == nil || [attachment hasError]) {
+            DDLogWarn(@"%@ %s Invalid attachment: %@.",
+                self.tag,
+                __PRETTY_FUNCTION__,
+                attachment ? [attachment errorName] : @"Missing data");
+            [self showErrorAlertForAttachment:attachment];
+        } else {
+            __weak MessagesViewController *weakSelf = self;
+            UIViewController *viewController =
+                [[AttachmentApprovalViewController alloc] initWithAttachment:attachment
+                                                           successCompletion:^{
+                                                               [weakSelf sendMessageAttachment:attachment];
+                                                           }];
+            UINavigationController *navigationController =
+                [[UINavigationController alloc] initWithRootViewController:viewController];
+            [self.navigationController presentViewController:navigationController animated:YES completion:nil];
+        }
+    });
 }
 
 - (void)showErrorAlertForAttachment:(SignalAttachment * _Nullable)attachment {

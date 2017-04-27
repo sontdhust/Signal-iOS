@@ -14,8 +14,17 @@
 @property (nonatomic, strong) IBOutlet UILabel *emptyBoxLabel;
 @property (nonatomic) BOOL newlyRegisteredUser;
 
-- (void)presentThread:(TSThread *)thread keyboardOnViewAppearing:(BOOL)keyboardOnViewAppearing;
+- (void)presentThread:(TSThread *)thread
+    keyboardOnViewAppearing:(BOOL)keyboardOnViewAppearing
+        callOnViewAppearing:(BOOL)callOnViewAppearing;
 - (NSNumber *)updateInboxCountLabel;
 - (void)composeNew;
+
+- (void)presentTopLevelModalViewController:(UIViewController *)viewController
+                          animateDismissal:(BOOL)animateDismissal
+                       animatePresentation:(BOOL)animatePresentation;
+- (void)pushTopLevelViewController:(UIViewController *)viewController
+                  animateDismissal:(BOOL)animateDismissal
+               animatePresentation:(BOOL)animatePresentation;
 
 @end

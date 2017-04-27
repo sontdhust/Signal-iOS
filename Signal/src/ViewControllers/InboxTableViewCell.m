@@ -5,14 +5,16 @@
 #import "InboxTableViewCell.h"
 #import "Environment.h"
 #import "OWSAvatarBuilder.h"
+#import "OWSContactAvatarBuilder.h"
 #import "PropertyListPreferences.h"
+#import "Signal-Swift.h"
 #import "TSContactThread.h"
 #import "TSGroupThread.h"
 #import "TSMessagesManager.h"
 #import "Util.h"
-#import "Signal-Swift.h"
 #import <JSQMessagesViewController/JSQMessagesAvatarImageFactory.h>
 #import <JSQMessagesViewController/UIImage+JSQMessages.h>
+#import <SignalServiceKit/OWSBlockingManager.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -24,11 +26,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface InboxTableViewCell ()
 
-@property NSUInteger unreadMessages;
-@property UIView *messagesBadge;
-@property UILabel *unreadLabel;
+@property (nonatomic) NSUInteger unreadMessages;
+@property (nonatomic) UIView *messagesBadge;
+@property (nonatomic) UILabel *unreadLabel;
 
 @end
+
+#pragma mark -
 
 @implementation InboxTableViewCell
 
@@ -40,6 +44,11 @@ NS_ASSUME_NONNULL_BEGIN
     return cell;
 }
 
++ (CGFloat)rowHeight
+{
+    return 72.f;
+}
+
 - (void)initializeLayout {
     self.selectionStyle = UITableViewCellSelectionStyleDefault;
 }
@@ -49,57 +58,141 @@ NS_ASSUME_NONNULL_BEGIN
     return NSStringFromClass(self.class);
 }
 
-- (void)configureWithThread:(TSThread *)thread contactsManager:(OWSContactsManager *)contactsManager
+- (void)configureWithThread:(TSThread *)thread
+            contactsManager:(OWSContactsManager *)contactsManager
+      blockedPhoneNumberSet:(NSSet<NSString *> *)blockedPhoneNumberSet
 {
-    if (!_threadId || ![_threadId isEqualToString:thread.uniqueId]) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self.hidden = YES;
-        });
+    OWSAssert([NSThread isMainThread]);
+    OWSAssert(thread);
+    OWSAssert(contactsManager);
+    OWSAssert(blockedPhoneNumberSet);
+
+    BOOL isBlocked = NO;
+    if (!thread.isGroupThread) {
+        NSString *contactIdentifier = thread.contactIdentifier;
+        isBlocked = [blockedPhoneNumberSet containsObject:contactIdentifier];
     }
 
     NSString *name = thread.name;
     if (name.length == 0 && [thread isKindOfClass:[TSGroupThread class]]) {
         name = NSLocalizedString(@"NEW_GROUP_DEFAULT_TITLE", @"");
     }
-    UIImage *avatar = [OWSAvatarBuilder buildImageForThread:thread contactsManager:contactsManager];
     self.threadId = thread.uniqueId;
-    NSString *snippetLabel = [[DisplayableTextFilter new] displayableText:thread.lastMessageLabel];
+    NSMutableAttributedString *snippetText = [NSMutableAttributedString new];
+    if (isBlocked) {
+        // If thread is blocked, don't show a snippet or mute status.
+        [snippetText appendAttributedString:[[NSAttributedString alloc] initWithString:NSLocalizedString(@"HOME_VIEW_BLOCKED_CONTACT_CONVERSATION",
+                                                                                                         @"A label for conversations with blocked users.")
+                                                                            attributes:@{
+                                                                                         NSFontAttributeName : [UIFont ows_mediumFontWithSize:12],
+                                                                                         NSForegroundColorAttributeName : [UIColor ows_blackColor],
+                                                                                         }]];
+    } else {
+        if ([thread isMuted]) {
+            [snippetText appendAttributedString:[[NSAttributedString alloc]
+                                                 initWithString:@"\ue067  "
+                                                 attributes:@{
+                                                              NSFontAttributeName : [UIFont ows_elegantIconsFont:9.f],
+                                                              NSForegroundColorAttributeName : (thread.hasUnreadMessages
+                                                                                                ? [UIColor colorWithWhite:0.1f alpha:1.f]
+                                                                                                : [UIColor lightGrayColor]),
+                                                              }]];
+        }
+        [snippetText appendAttributedString:[[NSAttributedString alloc] initWithString:[[DisplayableTextFilter new] displayableText:thread.lastMessageLabel]
+                                                                            attributes:@{
+                                                                                         NSFontAttributeName : (thread.hasUnreadMessages
+                                                                                                                ? [UIFont ows_mediumFontWithSize:12]
+                                                                                                                : [UIFont ows_regularFontWithSize:12]),
+                                                                                         NSForegroundColorAttributeName : (thread.hasUnreadMessages
+                                                                                                                           ? [UIColor ows_blackColor]
+                                                                                                                           : [UIColor lightGrayColor]),
+                                                                                         }]];
+    }
 
     NSAttributedString *attributedDate = [self dateAttributedString:thread.lastMessageDate];
-    NSUInteger unreadCount             = [[TSMessagesManager sharedManager] unreadMessagesInThread:thread];
+    NSUInteger unreadCount = [[TSMessagesManager sharedManager] unreadMessagesInThread:thread];
 
-    dispatch_async(dispatch_get_main_queue(), ^{
-        self.nameLabel.text = name;
-        self.snippetLabel.text = snippetLabel;
-        self.timeLabel.attributedText = attributedDate;
-        self.contactPictureView.image = avatar;
-        [UIUtil applyRoundedBorderToImageView:_contactPictureView];
+    self.nameLabel.text = name;
+    self.snippetLabel.attributedText = snippetText;
+    self.timeLabel.attributedText = attributedDate;
+    self.contactPictureView.image = nil;
+    [UIUtil applyRoundedBorderToImageView:_contactPictureView];
 
-        self.separatorInset = UIEdgeInsetsMake(0, _contactPictureView.frame.size.width * 1.5f, 0, 0);
+    self.separatorInset = UIEdgeInsetsMake(0, _contactPictureView.frame.size.width * 1.5f, 0, 0);
 
-        if (thread.hasUnreadMessages) {
-            [self updateCellForUnreadMessage];
-        } else {
-            [self updateCellForReadMessage];
-        }
-        [self setUnreadMsgCount:unreadCount];
-        self.hidden = NO;
+    if (thread.hasUnreadMessages) {
+        [self updateCellForUnreadMessage];
+    } else {
+        [self updateCellForReadMessage];
+    }
+    [self setUnreadMsgCount:unreadCount];
+
+    NSString *threadIdCopy = thread.uniqueId;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        UIImage *avatar = [OWSAvatarBuilder buildImageForThread:thread contactsManager:contactsManager];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([_threadId isEqualToString:threadIdCopy]) {
+                self.contactPictureView.image = avatar;
+            }
+        });
+    });
+}
+
+- (void)configureWithContact:(Contact *)contact
+                 recipientId:(NSString *)recipientId
+             contactsManager:(OWSContactsManager *)contactsManager
+                   isBlocked:(BOOL)isBlocked
+{
+    OWSAssert([NSThread isMainThread]);
+    OWSAssert(contact);
+    OWSAssert(recipientId.length > 0);
+    OWSAssert(contactsManager);
+
+    NSString *name = contact.fullName;
+    self.threadId = recipientId;
+    NSMutableAttributedString *snippetText = [NSMutableAttributedString new];
+    if (isBlocked) {
+        // If thread is blocked, don't show a snippet or mute status.
+        [snippetText
+            appendAttributedString:[[NSAttributedString alloc]
+                                       initWithString:NSLocalizedString(@"HOME_VIEW_BLOCKED_CONTACT_CONVERSATION",
+                                                          @"A label for conversations with blocked users.")
+                                           attributes:@{
+                                               NSFontAttributeName : [UIFont ows_mediumFontWithSize:12],
+                                               NSForegroundColorAttributeName : [UIColor ows_blackColor],
+                                           }]];
+    }
+
+    self.nameLabel.text = name;
+    self.snippetLabel.attributedText = snippetText;
+    self.contactPictureView.image = [UIImage imageNamed:@"empty-group-avatar"];
+    [UIUtil applyRoundedBorderToImageView:_contactPictureView];
+
+    self.separatorInset = UIEdgeInsetsMake(0, _contactPictureView.frame.size.width * 1.5f, 0, 0);
+
+    [self updateCellForUnreadMessage];
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        UIImage *avatar = [[[OWSContactAvatarBuilder alloc] initWithContactId:recipientId
+                                                                         name:contact.fullName
+                                                              contactsManager:contactsManager] build];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([self.threadId isEqualToString:recipientId]) {
+                self.contactPictureView.image = avatar;
+            }
+        });
     });
 }
 
 - (void)updateCellForUnreadMessage {
     _nameLabel.font         = [UIFont ows_boldFontWithSize:14.0f];
     _nameLabel.textColor    = [UIColor ows_blackColor];
-    _snippetLabel.font      = [UIFont ows_mediumFontWithSize:12];
-    _snippetLabel.textColor = [UIColor ows_blackColor];
     _timeLabel.textColor    = [UIColor ows_materialBlueColor];
 }
 
 - (void)updateCellForReadMessage {
     _nameLabel.font         = [UIFont ows_boldFontWithSize:14.0f];
     _nameLabel.textColor    = [UIColor ows_blackColor];
-    _snippetLabel.font      = [UIFont ows_regularFontWithSize:12];
-    _snippetLabel.textColor = [UIColor lightGrayColor];
     _timeLabel.textColor    = [UIColor ows_darkGrayColor];
 }
 

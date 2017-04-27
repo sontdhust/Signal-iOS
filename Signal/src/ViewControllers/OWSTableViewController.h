@@ -6,6 +6,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+extern const CGFloat kOWSTable_DefaultCellHeight;
+
 @class OWSTableItem;
 @class OWSTableSection;
 
@@ -21,11 +23,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface OWSTableSection : NSObject
 
-@property (nonatomic, nullable) NSString *title;
+@property (nonatomic, nullable) NSString *headerTitle;
+@property (nonatomic, nullable) NSString *footerTitle;
 
-+ (OWSTableSection *)sectionWithTitle:(NSString *)title items:(NSArray<OWSTableItem *> *)items;
+@property (nonatomic, nullable) UIView *customHeaderView;
+@property (nonatomic, nullable) UIView *customFooterView;
+@property (nonatomic, nullable) NSNumber *customHeaderHeight;
+@property (nonatomic, nullable) NSNumber *customFooterHeight;
+
++ (OWSTableSection *)sectionWithTitle:(nullable NSString *)title items:(NSArray<OWSTableItem *> *)items;
 
 - (void)addItem:(OWSTableItem *)item;
+
+- (NSUInteger)itemCount;
 
 @end
 
@@ -61,9 +71,20 @@ typedef UITableViewCell *_Nonnull (^OWSTableCustomCellBlock)();
 
 #pragma mark -
 
-@interface OWSTableViewController : UITableViewController
+@protocol OWSTableViewControllerDelegate <NSObject>
+
+- (void)tableViewDidScroll;
+
+@end
+
+#pragma mark -
+
+@interface OWSTableViewController : UIViewController
+
+@property (nonatomic, weak) id<OWSTableViewControllerDelegate> delegate;
 
 @property (nonatomic) OWSTableContents *contents;
+@property (nonatomic, readonly) UITableView *tableView;
 
 #pragma mark - Presentation
 

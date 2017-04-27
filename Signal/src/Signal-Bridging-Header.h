@@ -7,14 +7,18 @@
 #import "Asserts.h"
 #import "AttachmentSharing.h"
 #import "Environment.h"
+#import "FLAnimatedImage.h"
 #import "NotificationsManager.h"
 #import "OWSAnyTouchGestureRecognizer.h"
+#import "OWSAudioAttachmentPlayer.h"
 #import "OWSCallNotificationsAdaptee.h"
 #import "OWSContactAvatarBuilder.h"
 #import "OWSContactsManager.h"
 #import "OWSDispatch.h"
 #import "OWSError.h"
 #import "OWSLogger.h"
+#import "OWSMessageEditing.h"
+#import "OWSProgressView.h"
 #import "OWSWebRTCDataProtos.pb.h"
 #import "PrivacySettingsTableViewController.h"
 #import "PropertyListPreferences.h"
@@ -25,6 +29,10 @@
 #import "UIFont+OWS.h"
 #import "UIUtil.h"
 #import "UIView+OWS.h"
+#import "ViewControllerUtils.h"
+#import <JSQMessagesViewController/JSQMediaItem.h>
+#import <JSQMessagesViewController/JSQMessagesMediaViewBubbleImageMasker.h>
+#import <JSQMessagesViewController/UIColor+JSQMessages.h>
 #import <JSQSystemSoundPlayer.h>
 #import <PureLayout/PureLayout.h>
 #import <SignalServiceKit/Contact.h>
@@ -34,6 +42,7 @@
 #import <SignalServiceKit/NSData+Base64.h>
 #import <SignalServiceKit/NSDate+millisecondTimeStamp.h>
 #import <SignalServiceKit/OWSAcknowledgeMessageDeliveryRequest.h>
+#import <SignalServiceKit/OWSAttachmentsProcessor.h>
 #import <SignalServiceKit/OWSCallAnswerMessage.h>
 #import <SignalServiceKit/OWSCallBusyMessage.h>
 #import <SignalServiceKit/OWSCallHangupMessage.h>
@@ -51,6 +60,7 @@
 #import <SignalServiceKit/SignalRecipient.h>
 #import <SignalServiceKit/TSAccountManager.h>
 #import <SignalServiceKit/TSAttachment.h>
+#import <SignalServiceKit/TSAttachmentPointer.h>
 #import <SignalServiceKit/TSAttachmentStream.h>
 #import <SignalServiceKit/TSCall.h>
 #import <SignalServiceKit/TSContactThread.h>

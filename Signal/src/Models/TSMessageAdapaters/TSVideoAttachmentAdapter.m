@@ -9,9 +9,11 @@
 #import "TSAttachmentStream.h"
 #import "TSMessagesManager.h"
 #import "TSStorageManager+keyingMaterial.h"
+#import "UIView+OWS.h"
 #import <JSQMessagesViewController/JSQMessagesMediaViewBubbleImageMasker.h>
 #import <MobileCoreServices/MobileCoreServices.h>
 #import <SCWaveformView.h>
+
 #define AUDIO_BAR_HEIGHT 36
 
 NS_ASSUME_NONNULL_BEGIN
@@ -26,6 +28,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, nullable) UILabel *durationLabel;
 @property (nonatomic) BOOL incoming;
 @property (nonatomic, nullable) AttachmentUploadView *attachmentUploadView;
+@property (nonatomic) BOOL isAudioPlaying;
+@property (nonatomic) BOOL isPaused;
+
+// See comments on OWSMessageMediaAdapter.
+@property (nonatomic, nullable, weak) id lastPresentingCell;
 
 @end
 
@@ -47,10 +54,28 @@ NS_ASSUME_NONNULL_BEGIN
     return self;
 }
 
+- (void)clearAllViews
+{
+    [_cachedImageView removeFromSuperview];
+    _cachedImageView = nil;
+    _attachmentUploadView = nil;
+}
+
+- (void)clearCachedMediaViews
+{
+    [super clearCachedMediaViews];
+    [self clearAllViews];
+}
+
+- (void)setAppliesMediaViewMaskAsOutgoing:(BOOL)appliesMediaViewMaskAsOutgoing
+{
+    [super setAppliesMediaViewMaskAsOutgoing:appliesMediaViewMaskAsOutgoing];
+    [self clearAllViews];
+}
+
 - (BOOL)isAudio {
     return [MIMETypeUtil isSupportedAudioMIMEType:_contentType];
 }
-
 
 - (BOOL)isVideo {
     return [MIMETypeUtil isSupportedVideoMIMEType:_contentType];
@@ -76,24 +101,16 @@ NS_ASSUME_NONNULL_BEGIN
     });
 }
 
-- (void)resetAudioDuration {
-    NSError *err;
-    AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithContentsOfURL:_attachment.mediaURL error:&err];
-    _durationLabel.text   = [self formatDuration:player.duration];
-}
-
-- (void)setDurationOfAudio:(NSTimeInterval)duration {
-    _durationLabel.text = [self formatDuration:duration];
-}
-
 - (void)setAudioIconToPlay {
-    [_audioPlayPauseButton setBackgroundImage:[UIImage imageNamed:@"audio_play_button_blue"]
-                                     forState:UIControlStateNormal];
+    [_audioPlayPauseButton
+        setBackgroundImage:[UIImage imageNamed:(_incoming ? @"audio_play_button_blue" : @"audio_play_button")]
+                  forState:UIControlStateNormal];
 }
 
 - (void)setAudioIconToPause {
-    [_audioPlayPauseButton setBackgroundImage:[UIImage imageNamed:@"audio_pause_button_blue"]
-                                     forState:UIControlStateNormal];
+    [_audioPlayPauseButton
+        setBackgroundImage:[UIImage imageNamed:(_incoming ? @"audio_pause_button_blue" : @"audio_pause_button")]
+                  forState:UIControlStateNormal];
 }
 
 - (void)removeDurationLabel {
@@ -107,8 +124,8 @@ NS_ASSUME_NONNULL_BEGIN
     if ([self isVideo]) {
         if (self.cachedImageView == nil) {
             UIImageView *imageView  = [[UIImageView alloc] initWithImage:self.image];
-            imageView.frame         = CGRectMake(0.0f, 0.0f, size.width, size.height);
             imageView.contentMode   = UIViewContentModeScaleAspectFill;
+            imageView.frame         = CGRectMake(0.0f, 0.0f, size.width, size.height);
             imageView.clipsToBounds = YES;
             [JSQMessagesMediaViewBubbleImageMasker applyBubbleImageMaskToMediaView:imageView
                                                                         isOutgoing:self.appliesMediaViewMaskAsOutgoing];
@@ -149,8 +166,7 @@ NS_ASSUME_NONNULL_BEGIN
         audioBubble.layer.masksToBounds = YES;
 
         _audioPlayPauseButton = [[UIButton alloc] initWithFrame:CGRectMake(3, 3, 30, 30)];
-        [_audioPlayPauseButton setBackgroundImage:[UIImage imageNamed:@"audio_play_button"]
-                                         forState:UIControlStateNormal];
+        _audioPlayPauseButton.enabled = NO;
 
         AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:&err];
         _durationLabel        = [[UILabel alloc] init];
@@ -170,8 +186,6 @@ NS_ASSUME_NONNULL_BEGIN
             _waveform.normalColor = [UIColor whiteColor];
             _waveform.progressColor =
                 [UIColor colorWithRed:107 / 255.0f green:185 / 255.0f blue:254 / 255.0f alpha:1.0f];
-            [_audioPlayPauseButton setBackgroundImage:[UIImage imageNamed:@"audio_play_button_blue"]
-                                             forState:UIControlStateNormal];
             _durationLabel.textColor = [UIColor darkTextColor];
         }
 
@@ -180,13 +194,15 @@ NS_ASSUME_NONNULL_BEGIN
         [audioBubble addSubview:_durationLabel];
 
         if (!_incoming) {
-            __weak TSVideoAttachmentAdapter *weakSelf = self;
             self.attachmentUploadView = [[AttachmentUploadView alloc] initWithAttachment:self.attachment
                                                                                superview:audioBubble
-                                                                 attachmentStateCallback:^(BOOL isAttachmentReady) {
-                                                                     weakSelf.audioPlayPauseButton.enabled
-                                                                         = isAttachmentReady;
-                                                                 }];
+                                                                 attachmentStateCallback:nil];
+        }
+
+        if (self.isAudioPlaying) {
+            [self setAudioIconToPause];
+        } else {
+            [self setAudioIconToPlay];
         }
 
         return audioBubble;
@@ -213,11 +229,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSUInteger)hash {
     return [super hash];
-}
-
-- (void)setAppliesMediaViewMaskAsOutgoing:(BOOL)appliesMediaViewMaskAsOutgoing {
-    [super setAppliesMediaViewMaskAsOutgoing:appliesMediaViewMaskAsOutgoing];
-    _cachedImageView = nil;
 }
 
 #pragma mark - OWSMessageEditing Protocol
@@ -275,6 +286,23 @@ NS_ASSUME_NONNULL_BEGIN
         NSString *actionString = NSStringFromSelector(action);
         DDLogError(
             @"Unexpected action: %@ for VideoAttachmentAdapter with contentType: %@", actionString, self.contentType);
+        OWSAssert(NO);
+    }
+}
+
+#pragma mark - OWSMessageMediaAdapter
+
+- (void)setCellVisible:(BOOL)isVisible
+{
+    // Ignore.
+}
+
+- (void)clearCachedMediaViewsIfLastPresentingCell:(id)cell
+{
+    OWSAssert(cell);
+
+    if (cell == self.lastPresentingCell) {
+        [self clearCachedMediaViews];
     }
 }
 

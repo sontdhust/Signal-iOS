@@ -3,8 +3,9 @@
 //
 
 import Foundation
+import MediaPlayer
 
-class AttachmentApprovalViewController: UIViewController {
+class AttachmentApprovalViewController: UIViewController, OWSAudioAttachmentPlayerDelegate {
 
     let TAG = "[AttachmentApprovalViewController]"
 
@@ -14,12 +15,20 @@ class AttachmentApprovalViewController: UIViewController {
 
     var successCompletion : (() -> Void)?
 
+    var videoPlayer: MPMoviePlayerController?
+
+    var audioPlayer: OWSAudioAttachmentPlayer?
+    var audioPlayButton: UIButton?
+    var isAudioPlayingFlag = false
+    var isAudioPaused = false
+
     // MARK: Initializers
 
     @available(*, unavailable, message:"use attachment: constructor instead.")
     required init?(coder aDecoder: NSCoder) {
-        self.attachment = SignalAttachment.genericAttachment(data: nil,
-                                                             dataUTI: kUTTypeContent as String)
+        self.attachment = SignalAttachment.attachment(data: nil,
+                                                      dataUTI: kUTTypeContent as String,
+                                                      filename:nil)
         super.init(coder: aDecoder)
         assertionFailure()
     }
@@ -36,15 +45,34 @@ class AttachmentApprovalViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        view.backgroundColor = UIColor.black
+        view.backgroundColor = UIColor.white
 
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem:.stop,
-            target:self,
-            action:#selector(donePressed))
-        self.navigationItem.title = NSLocalizedString("ATTACHMENT_APPROVAL_DIALOG_TITLE",
-                                                      comment: "Title for the 'attachment approval' dialog.")
+                                                                target:self,
+                                                                action:#selector(donePressed))
+        self.navigationItem.title = dialogTitle()
 
         createViews()
+    }
+
+    private func dialogTitle() -> String {
+        guard let filename = formattedFileName() else {
+            return NSLocalizedString("ATTACHMENT_APPROVAL_DIALOG_TITLE",
+                                     comment: "Title for the 'attachment approval' dialog.")
+        }
+        return filename
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+
+        ViewControllerUtils.setAudioIgnoresHardwareMuteSwitch(true)
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+
+        ViewControllerUtils.setAudioIgnoresHardwareMuteSwitch(false)
     }
 
     // MARK: - Create Views
@@ -60,11 +88,92 @@ class AttachmentApprovalViewController: UIViewController {
 
         createButtonRow(attachmentPreviewView:attachmentPreviewView)
 
-        if attachment.isImage {
+        if attachment.isAnimatedImage {
+            createAnimatedPreview(attachmentPreviewView:attachmentPreviewView)
+        } else if attachment.isImage {
             createImagePreview(attachmentPreviewView:attachmentPreviewView)
+        } else if attachment.isVideo {
+            createVideoPreview(attachmentPreviewView:attachmentPreviewView)
+        } else if attachment.isAudio {
+            createAudioPreview(attachmentPreviewView:attachmentPreviewView)
         } else {
             createGenericPreview(attachmentPreviewView:attachmentPreviewView)
         }
+    }
+
+    private func wrapViewsInVerticalStack(subviews: [UIView]) -> UIView {
+        assert(subviews.count > 0)
+
+        let stackView = UIView()
+
+        var lastView: UIView?
+        for subview in subviews {
+
+            stackView.addSubview(subview)
+            subview.autoHCenterInSuperview()
+
+            if lastView == nil {
+                subview.autoPinEdge(toSuperviewEdge:.top)
+            } else {
+                subview.autoPinEdge(.top, to:.bottom, of:lastView!, withOffset:10)
+            }
+
+            lastView = subview
+        }
+
+        lastView?.autoPinEdge(toSuperviewEdge:.bottom)
+
+        return stackView
+    }
+
+    private func createAudioPreview(attachmentPreviewView: UIView) {
+        guard let dataUrl = attachment.getTemporaryDataUrl() else {
+            createGenericPreview(attachmentPreviewView:attachmentPreviewView)
+            return
+        }
+
+        audioPlayer = OWSAudioAttachmentPlayer(mediaUrl: dataUrl, delegate: self)
+
+        var subviews = [UIView]()
+
+        let audioPlayButton = UIButton()
+        self.audioPlayButton = audioPlayButton
+        setAudioIconToPlay()
+        audioPlayButton.imageView?.layer.minificationFilter = kCAFilterTrilinear
+        audioPlayButton.imageView?.layer.magnificationFilter = kCAFilterTrilinear
+        audioPlayButton.addTarget(self, action:#selector(audioPlayButtonPressed), for:.touchUpInside)
+        let buttonSize = createHeroViewSize()
+        audioPlayButton.autoSetDimension(.width, toSize:buttonSize)
+        audioPlayButton.autoSetDimension(.height, toSize:buttonSize)
+        subviews.append(audioPlayButton)
+
+        let fileNameLabel = createFileNameLabel()
+        if let fileNameLabel = fileNameLabel {
+            subviews.append(fileNameLabel)
+        }
+
+        let fileSizeLabel = createFileSizeLabel()
+        subviews.append(fileSizeLabel)
+
+        let stackView = wrapViewsInVerticalStack(subviews:subviews)
+        attachmentPreviewView.addSubview(stackView)
+        fileNameLabel?.autoPinWidthToSuperview(withMargin: 32)
+        stackView.autoPinWidthToSuperview()
+        stackView.autoVCenterInSuperview()
+    }
+
+    private func createAnimatedPreview(attachmentPreviewView: UIView) {
+        // Use Flipboard FLAnimatedImage library to display gifs
+        guard let animatedImage = FLAnimatedImage(gifData:attachment.data) else {
+            createGenericPreview(attachmentPreviewView:attachmentPreviewView)
+            return
+        }
+        let animatedImageView = FLAnimatedImageView()
+        animatedImageView.animatedImage = animatedImage
+        animatedImageView.contentMode = .scaleAspectFit
+        attachmentPreviewView.addSubview(animatedImageView)
+        animatedImageView.autoPinWidthToSuperview()
+        animatedImageView.autoPinHeightToSuperview()
     }
 
     private func createImagePreview(attachmentPreviewView: UIView) {
@@ -72,70 +181,136 @@ class AttachmentApprovalViewController: UIViewController {
         if image == nil {
             image = UIImage(data:attachment.data)
         }
-        if image != nil {
-            let imageView = UIImageView(image:image)
-            imageView.layer.minificationFilter = kCAFilterTrilinear
-            imageView.layer.magnificationFilter = kCAFilterTrilinear
-            imageView.contentMode = .scaleAspectFit
-            attachmentPreviewView.addSubview(imageView)
-            imageView.autoPinWidthToSuperview()
-            imageView.autoPinHeightToSuperview()
-        } else {
+        guard image != nil else {
             createGenericPreview(attachmentPreviewView:attachmentPreviewView)
+            return
         }
+
+        let imageView = UIImageView(image:image)
+        imageView.layer.minificationFilter = kCAFilterTrilinear
+        imageView.layer.magnificationFilter = kCAFilterTrilinear
+        imageView.contentMode = .scaleAspectFit
+        attachmentPreviewView.addSubview(imageView)
+        imageView.autoPinWidthToSuperview()
+        imageView.autoPinHeightToSuperview()
+    }
+
+    private func createVideoPreview(attachmentPreviewView: UIView) {
+        guard let dataUrl = attachment.getTemporaryDataUrl() else {
+            createGenericPreview(attachmentPreviewView:attachmentPreviewView)
+            return
+        }
+        guard let videoPlayer = MPMoviePlayerController(contentURL:dataUrl) else {
+            createGenericPreview(attachmentPreviewView:attachmentPreviewView)
+            return
+        }
+        videoPlayer.prepareToPlay()
+
+        videoPlayer.controlStyle = .default
+        videoPlayer.shouldAutoplay = false
+
+        attachmentPreviewView.addSubview(videoPlayer.view)
+        self.videoPlayer = videoPlayer
+        videoPlayer.view.autoPinWidthToSuperview()
+        videoPlayer.view.autoPinHeightToSuperview()
     }
 
     private func createGenericPreview(attachmentPreviewView: UIView) {
-        let stackView = UIView()
-        attachmentPreviewView.addSubview(stackView)
-        stackView.autoCenterInSuperview()
+        var subviews = [UIView]()
 
-        let imageSize = ScaleFromIPhone5To7Plus(175, 225)
-        let image = UIImage(named:"file-icon-large")
+        let imageView = createHeroImageView(imageName: "file-thin-black-filled-large")
+        subviews.append(imageView)
+
+        let fileNameLabel = createFileNameLabel()
+        if let fileNameLabel = fileNameLabel {
+            subviews.append(fileNameLabel)
+        }
+
+        let fileSizeLabel = createFileSizeLabel()
+        subviews.append(fileSizeLabel)
+
+        let stackView = wrapViewsInVerticalStack(subviews:subviews)
+        attachmentPreviewView.addSubview(stackView)
+        fileNameLabel?.autoPinWidthToSuperview(withMargin: 32)
+        stackView.autoPinWidthToSuperview()
+        stackView.autoVCenterInSuperview()
+    }
+
+    private func createHeroViewSize() -> CGFloat {
+        return ScaleFromIPhone5To7Plus(175, 225)
+    }
+
+    private func createHeroImageView(imageName: String) -> UIView {
+        let imageSize = createHeroViewSize()
+        let image = UIImage(named:imageName)
         assert(image != nil)
         let imageView = UIImageView(image:image)
         imageView.layer.minificationFilter = kCAFilterTrilinear
         imageView.layer.magnificationFilter = kCAFilterTrilinear
-        stackView.addSubview(imageView)
-        imageView.autoHCenterInSuperview()
-        imageView.autoPinEdge(toSuperviewEdge:.top)
+        imageView.layer.shadowColor = UIColor.black.cgColor
+        let shadowScaling = 5.0
+        imageView.layer.shadowRadius = CGFloat(2.0 * shadowScaling)
+        imageView.layer.shadowOpacity = 0.25
+        imageView.layer.shadowOffset = CGSize(width: 0.75 * shadowScaling, height: 0.75 * shadowScaling)
         imageView.autoSetDimension(.width, toSize:imageSize)
         imageView.autoSetDimension(.height, toSize:imageSize)
 
-        var lastView: UIView = imageView
+        return imageView
+    }
 
-        let labelFont = UIFont.ows_regularFont(withSize:ScaleFromIPhone5To7Plus(18, 24))
+    private func labelFont() -> UIFont {
+        return UIFont.ows_regularFont(withSize:ScaleFromIPhone5To7Plus(18, 24))
+    }
 
-        if let fileExtension = attachment.fileExtension {
-            let fileExtensionLabel = UILabel()
-            fileExtensionLabel.text = String(format:NSLocalizedString("ATTACHMENT_APPROVAL_FILE_EXTENSION_FORMAT",
-                                                                 comment: "Format string for file extension label in call interstitial view"),
-                                             fileExtension.capitalized)
-
-            fileExtensionLabel.textColor = UIColor.white
-            fileExtensionLabel.font = labelFont
-            fileExtensionLabel.textAlignment = .center
-            stackView.addSubview(fileExtensionLabel)
-            fileExtensionLabel.autoHCenterInSuperview()
-            fileExtensionLabel.autoPinEdge(.top, to:.bottom, of:lastView, withOffset:10)
-
-            lastView = fileExtensionLabel
+    private func formattedFileExtension() -> String? {
+        guard let fileExtension = attachment.fileExtension else {
+            return nil
         }
 
-        let numberFormatter = NumberFormatter()
-        numberFormatter.numberStyle = NumberFormatter.Style.decimal
-        let fileSizeLabel = UILabel()
-        fileSizeLabel.text = String(format:NSLocalizedString("ATTACHMENT_APPROVAL_FILE_SIZE_FORMAT",
-                                                             comment: "Format string for file size label in call interstitial view"),
-                                    numberFormatter.string(from: NSNumber(value: attachment.data.count))!)
+        return String(format:NSLocalizedString("ATTACHMENT_APPROVAL_FILE_EXTENSION_FORMAT",
+                                               comment: "Format string for file extension label in call interstitial view"),
+                      fileExtension.uppercased())
+    }
 
-        fileSizeLabel.textColor = UIColor.white
-        fileSizeLabel.font = labelFont
-        fileSizeLabel.textAlignment = .center
-        stackView.addSubview(fileSizeLabel)
-        fileSizeLabel.autoHCenterInSuperview()
-        fileSizeLabel.autoPinEdge(.top, to:.bottom, of:lastView, withOffset:10)
-        fileSizeLabel.autoPinEdge(toSuperviewEdge:.bottom)
+    private func formattedFileName() -> String? {
+        guard let rawFilename = attachment.filename else {
+            return nil
+        }
+        let filename = rawFilename.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        guard filename.characters.count > 0 else {
+            return nil
+        }
+        return filename
+    }
+
+    private func createFileNameLabel() -> UIView? {
+        let filename = formattedFileName() ?? formattedFileExtension()
+
+        guard filename != nil else {
+            return nil
+        }
+
+        let label = UILabel()
+        label.text = filename
+        label.textColor = UIColor.ows_materialBlue()
+        label.font = labelFont()
+        label.textAlignment = .center
+        label.lineBreakMode = .byTruncatingMiddle
+        return label
+    }
+
+    private func createFileSizeLabel() -> UIView {
+        let label = UILabel()
+        let fileSize = attachment.data.count
+        label.text = String(format:NSLocalizedString("ATTACHMENT_APPROVAL_FILE_SIZE_FORMAT",
+                                                             comment: "Format string for file size label in call interstitial view. Embeds: {{file size as 'N mb' or 'N kb'}}."),
+                                    ViewControllerUtils.formatFileSize(UInt(fileSize)))
+
+        label.textColor = UIColor.ows_materialBlue()
+        label.font = labelFont()
+        label.textAlignment = .center
+
+        return label
     }
 
     private func createButtonRow(attachmentPreviewView: UIView) {
@@ -160,7 +335,7 @@ class AttachmentApprovalViewController: UIViewController {
 
         let cancelButton = createButton(title: NSLocalizedString("TXT_CANCEL_TITLE",
                                                                  comment: ""),
-                                        color : UIColor(rgbHex:0xff3B30),
+                                        color : UIColor.ows_destructiveRed(),
                                         action: #selector(cancelPressed))
         buttonRow.addSubview(cancelButton)
         cancelButton.autoPinEdge(toSuperviewEdge:.top)
@@ -169,7 +344,7 @@ class AttachmentApprovalViewController: UIViewController {
 
         let sendButton = createButton(title: NSLocalizedString("ATTACHMENT_APPROVAL_SEND_BUTTON",
                                                                comment: "Label for 'send' button in the 'attachment approval' dialog."),
-                                      color : UIColor(rgbHex:0x4CD964),
+                                      color : UIColor(rgbHex:0x2ecc71),
                                       action: #selector(sendPressed))
         buttonRow.addSubview(sendButton)
         sendButton.autoPinEdge(toSuperviewEdge:.top)
@@ -211,5 +386,43 @@ class AttachmentApprovalViewController: UIViewController {
         dismiss(animated: true, completion: {
             successCompletion?()
         })
+    }
+
+    func audioPlayButtonPressed(sender: UIButton) {
+        audioPlayer?.togglePlayState()
+    }
+
+    // MARK: - OWSAudioAttachmentPlayerDelegate
+
+    public func isAudioPlaying() -> Bool {
+        return isAudioPlayingFlag
+    }
+
+    public func setIsAudioPlaying(_ isAudioPlaying: Bool) {
+        isAudioPlayingFlag = isAudioPlaying
+    }
+
+    public func isPaused() -> Bool {
+        return isAudioPaused
+    }
+
+    public func setIsPaused(_ isPaused: Bool) {
+        isAudioPaused = isPaused
+    }
+
+    public func setAudioProgressFrom(_ progress: Float) {
+        // Ignore
+    }
+
+    public func setAudioIconToPlay() {
+        let image = UIImage(named:"audio_play_white_large")
+        assert(image != nil)
+        audioPlayButton?.setImage(image, for:.normal)
+    }
+
+    public func setAudioIconToPause() {
+        let image = UIImage(named:"audio_pause_white_large")
+        assert(image != nil)
+        audioPlayButton?.setImage(image, for:.normal)
     }
 }

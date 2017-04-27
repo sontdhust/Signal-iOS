@@ -162,7 +162,7 @@ NS_ASSUME_NONNULL_BEGIN
                             [[TSPhotoAdapter alloc] initWithAttachment:stream incoming:isIncomingAttachment];
                         adapter.mediaItem.appliesMediaViewMaskAsOutgoing = !isIncomingAttachment;
                         break;
-                    } else if ([stream isVideo]) {
+                    } else if ([stream isVideo] || [stream isAudio]) {
                         adapter.mediaItem = [[TSVideoAttachmentAdapter alloc]
                             initWithAttachment:stream
                                       incoming:[interaction isKindOfClass:[TSIncomingMessage class]]];
@@ -177,19 +177,9 @@ NS_ASSUME_NONNULL_BEGIN
                     }
                 } else if ([attachment isKindOfClass:[TSAttachmentPointer class]]) {
                     TSAttachmentPointer *pointer = (TSAttachmentPointer *)attachment;
-                    adapter.messageType          = TSInfoMessageAdapter;
-
-                    switch (pointer.state) {
-                        case TSAttachmentPointerStateEnqueued:
-                            adapter.messageBody = NSLocalizedString(@"ATTACHMENT_QUEUED", nil);
-                            break;
-                        case TSAttachmentPointerStateDownloading:
-                            adapter.messageBody = NSLocalizedString(@"ATTACHMENT_DOWNLOADING", nil);
-                            break;
-                        case TSAttachmentPointerStateFailed:
-                            adapter.messageBody = NSLocalizedString(@"ATTACHMENT_DOWNLOAD_FAILED", nil);
-                            break;
-                    }
+                    adapter.mediaItem =
+                        [[AttachmentPointerAdapter alloc] initWithAttachmentPointer:pointer
+                                                                         isIncoming:isIncomingAttachment];
                 } else {
                     DDLogError(@"We retrieved an attachment that doesn't have a known type : %@",
                                NSStringFromClass([attachment class]));
@@ -256,6 +246,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL)canPerformEditingAction:(SEL)action
 {
+    if ([self attachmentStream] && ![self attachmentStream].isUploaded) {
+        return NO;
+    }
+
     // Deletes are always handled by TSMessageAdapter
     if (action == @selector(delete:)) {
         return YES;
@@ -312,6 +306,7 @@ NS_ASSUME_NONNULL_BEGIN
         actionString,
         self.interaction.uniqueId,
         [self.mediaItem class]);
+    OWSAssert(NO);
 }
 
 - (TSAttachmentStream *)attachmentStream
@@ -372,17 +367,6 @@ NS_ASSUME_NONNULL_BEGIN
     if ([self.interaction isKindOfClass:[TSOutgoingMessage class]]) {
         TSOutgoingMessage *outgoingMessage = (TSOutgoingMessage *)self.interaction;
         if (outgoingMessage.hasAttachments && outgoingMessage.messageState == TSOutgoingMessageStateAttemptingOut) {
-            return YES;
-        }
-    }
-    return NO;
-}
-
-- (BOOL)isOutgoingAndDelivered
-{
-    if ([self.interaction isKindOfClass:[TSOutgoingMessage class]]) {
-        TSOutgoingMessage *outgoingMessage = (TSOutgoingMessage *)self.interaction;
-        if (outgoingMessage.messageState == TSOutgoingMessageStateDelivered) {
             return YES;
         }
     }

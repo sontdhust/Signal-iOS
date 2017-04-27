@@ -22,8 +22,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 NSString * const kAddToBlockListViewControllerCellIdentifier = @"kAddToBlockListViewControllerCellIdentifier";
 
-NSString *const kContactsTable_CellReuseIdentifier = @"kContactsTable_CellReuseIdentifier";
-
 #pragma mark -
 
 @interface AddToBlockListViewController () <CountryCodeViewControllerDelegate,
@@ -436,6 +434,8 @@ NSString *const kContactsTable_CellReuseIdentifier = @"kContactsTable_CellReuseI
     [self updateCountryWithName:countryName
                     callingCode:callingCode
                     countryCode:countryCode];
+
+    [self textField:_phoneNumberTextField shouldChangeCharactersInRange:NSMakeRange(0, 0) replacementString:@""];
 }
 
 #pragma mark - UITextFieldDelegate

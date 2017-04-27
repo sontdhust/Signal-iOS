@@ -17,6 +17,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, nullable) AttachmentUploadView *attachmentUploadView;
 @property (nonatomic) BOOL incoming;
 
+// See comments on OWSMessageMediaAdapter.
+@property (nonatomic, nullable, weak) id lastPresentingCell;
+
 @end
 
 #pragma mark -
@@ -39,14 +42,22 @@ NS_ASSUME_NONNULL_BEGIN
     return self;
 }
 
-- (void)dealloc {
-    self.image       = nil;
+- (void)clearAllViews
+{
+    [_cachedImageView removeFromSuperview];
     _cachedImageView = nil;
+    _attachmentUploadView = nil;
+}
+
+- (void)clearCachedMediaViews
+{
+    [super clearCachedMediaViews];
+    [self clearAllViews];
 }
 
 - (void)setAppliesMediaViewMaskAsOutgoing:(BOOL)appliesMediaViewMaskAsOutgoing {
     [super setAppliesMediaViewMaskAsOutgoing:appliesMediaViewMaskAsOutgoing];
-    _cachedImageView = nil;
+    [self clearAllViews];
 }
 
 #pragma mark - JSQMessageMediaData protocol
@@ -59,8 +70,8 @@ NS_ASSUME_NONNULL_BEGIN
     if (self.cachedImageView == nil) {
         CGSize size             = [self mediaViewDisplaySize];
         UIImageView *imageView  = [[UIImageView alloc] initWithImage:self.image];
-        imageView.frame         = CGRectMake(0.0f, 0.0f, size.width, size.height);
         imageView.contentMode   = UIViewContentModeScaleAspectFill;
+        imageView.frame         = CGRectMake(0.0f, 0.0f, size.width, size.height);
         imageView.clipsToBounds = YES;
         // Use trilinear filters for better scaling quality at
         // some performance cost.
@@ -124,9 +135,26 @@ NS_ASSUME_NONNULL_BEGIN
         UIImageWriteToSavedPhotosAlbum(self.image, nil, nil, nil);
         return;
     }
-
+    
     // Shouldn't get here, as only supported actions should be exposed via canPerformEditingAction
     DDLogError(@"'%@' action unsupported for %@: attachmentId=%@", actionString, self.class, self.attachmentId);
+    OWSAssert(NO);
+}
+
+#pragma mark - OWSMessageMediaAdapter
+
+- (void)setCellVisible:(BOOL)isVisible
+{
+    // Ignore.
+}
+
+- (void)clearCachedMediaViewsIfLastPresentingCell:(id)cell
+{
+    OWSAssert(cell);
+
+    if (cell == self.lastPresentingCell) {
+        [self clearCachedMediaViews];
+    }
 }
 
 @end

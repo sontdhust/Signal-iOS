@@ -55,17 +55,23 @@
 /* Format string for file extension label in call interstitial view */
 "ATTACHMENT_APPROVAL_FILE_EXTENSION_FORMAT" = "Vrsta datoteke: %@";
 
-/* Format string for file size label in call interstitial view */
-"ATTACHMENT_APPROVAL_FILE_SIZE_FORMAT" = "Veličina datoteke: %@";
+/* Format string for file size label in call interstitial view. Embeds: {{file size as 'N mb' or 'N kb'}}. */
+"ATTACHMENT_APPROVAL_FILE_SIZE_FORMAT" = "Veličina: %@";
 
 /* Label for 'send' button in the 'attachment approval' dialog. */
 "ATTACHMENT_APPROVAL_SEND_BUTTON" = "Šalji";
 
-/* No comment provided by engineer. */
-"ATTACHMENT_DOWNLOAD_FAILED" = "Preuzimanje privitka nije uspjelo, dodirni za pokušaj.";
+/* Generic filename for an attachment with no known name */
+"ATTACHMENT_DEFAULT_FILENAME" = "Privitak";
 
-/* No comment provided by engineer. */
-"ATTACHMENT_DOWNLOADING" = "Preuzimanje privitka";
+/* Status label when an attachment download has failed. */
+"ATTACHMENT_DOWNLOADING_STATUS_FAILED" = "Neuspješno. Dodirni za pokušaj.";
+
+/* Status label when an attachment is currently downloading */
+"ATTACHMENT_DOWNLOADING_STATUS_IN_PROGRESS" = "Preuzimanje...";
+
+/* Status label when an attachment is enqueued, but hasn't yet started downloading */
+"ATTACHMENT_DOWNLOADING_STATUS_QUEUED" = "Na redu čekanja";
 
 /* The title of the 'attachment error' alert. */
 "ATTACHMENT_ERROR_ALERT_TITLE" = "Greška kod slanja privitka";
@@ -88,14 +94,26 @@
 /* Attachment error message for attachments without any data */
 "ATTACHMENT_ERROR_MISSING_DATA" = "Privitak je prazan.";
 
+/* Attachment error message for attachments with an invalid file format */
+"ATTACHMENT_ERROR_UNKNOWN_TYPE" = "Attachment is of invalid type";
+
 /* Accessibility hint describing what you can do with the attachment button */
 "ATTACHMENT_HINT" = "Odaberi ili uslikaj fotografiju i zatim je pošalji";
 
 /* Accessibility label for attaching photos */
 "ATTACHMENT_LABEL" = "Privitak";
 
-/* No comment provided by engineer. */
-"ATTACHMENT_QUEUED" = "Novi privitak na čekanju za preuzimanje.";
+/* Alert title when picking a document fails for an unknown reason */
+"ATTACHMENT_PICKER_DOCUMENTS_FAILED_ALERT_TITLE" = "Neuspješan odabir dokumenta.";
+
+/* Alert body when picking a document fails because user picked a directory/bundle */
+"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_BODY" = "Signal can't handle that file as is. Try zipping it before sending.";
+
+/* Alert title when picking a document fails because user picked a directory/bundle */
+"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_TITLE" = "Unsupported File";
+
+/* An explanation of the consequences of blocking another user. */
+"BLOCK_BEHAVIOR_EXPLANATION" = "Blokirani korisnici neće biti u mogućnosti da vas pozovu ili vam pošalju poruku.";
 
 /* Button label for the 'block' button */
 "BLOCK_LIST_BLOCK_BUTTON" = "Blokiraj";
@@ -130,6 +148,12 @@
 /* The title of the 'user blocked' alert. */
 "BLOCK_LIST_VIEW_BLOCKED_ALERT_TITLE" = "Korisnik je blokiran";
 
+/* The message of the 'You can't block yourself' alert. */
+"BLOCK_LIST_VIEW_CANT_BLOCK_SELF_ALERT_MESSAGE" = "Ne možete blokirati sebe.";
+
+/* The title of the 'You can't block yourself' alert. */
+"BLOCK_LIST_VIEW_CANT_BLOCK_SELF_ALERT_TITLE" = "Greška";
+
 /* A title for the contacts section of the block list view. */
 "BLOCK_LIST_VIEW_CONTACTS_SECTION_TITLE" = "Kontakti";
 
@@ -144,6 +168,18 @@
 
 /* The title of the 'user unblocked' alert. */
 "BLOCK_LIST_VIEW_UNBLOCKED_ALERT_TITLE" = "Korisnik odblokiran";
+
+/* Action sheet that will block an unknown user. */
+"BLOCK_OFFER_ACTIONSHEET_BLOCK_ACTION" = "Blokiraj";
+
+/* Title format for action sheet that offers to block an unknown user.Embeds {{the unknown user's name or phone number}}. */
+"BLOCK_OFFER_ACTIONSHEET_TITLE_FORMAT" = "Blokiraj %@?";
+
+/* Alert message when calling and permissions for microphone are missing */
+"CALL_AUDIO_PERMISSION_MESSAGE" = "Signal zahtijeva pristup mikrofonu za upućivanje poziva. Možete odobriti ovu dozvolu u aplikaciji Postavke.";
+
+/* Alert title when calling and permissions for microphone are missing */
+"CALL_AUDIO_PERMISSION_TITLE" = "Zahtijeva pristup mikrofonu";
 
 /* Accessibilty label for placing call button */
 "CALL_LABEL" = "Poziv";
@@ -194,10 +230,10 @@
 "CONFIRMATION_TITLE" = "Potvrdi";
 
 /* An indicator that a contact has been blocked. */
-"CONTACT_CELL_IS_BLOCKED" = "Blocked";
+"CONTACT_CELL_IS_BLOCKED" = "Blokiran";
 
 /* An indicator that a contact is a member of the current group. */
-"CONTACT_CELL_IS_IN_GROUP" = "Group Member";
+"CONTACT_CELL_IS_IN_GROUP" = "Član grupe";
 
 /* No comment provided by engineer. */
 "CONTACT_DETAIL_COMM_TYPE_INSECURE" = "Neregistrirani broj";
@@ -214,11 +250,35 @@
 /* table cell label in conversation settings */
 "CONVERSATION_SETTINGS_BLOCK_THIS_USER" = "Blokiraj ovog korisnika";
 
-/* The message of the 'text message too large' alert. */
-"CONVERSATION_VIEW_TEXT_MESSAGE_TOO_LARGE_ALERT_MESSAGE" = "Ova poruka je predugačka za slanje.";
+/* Title of the 'mute this thread' action sheet. */
+"CONVERSATION_SETTINGS_MUTE_ACTION_SHEET_TITLE" = "Utišaj";
 
-/* The title of the 'text message too large' alert. */
-"CONVERSATION_VIEW_TEXT_MESSAGE_TOO_LARGE_ALERT_TITLE" = "Greška";
+/* label for 'mute thread' cell in conversation settings */
+"CONVERSATION_SETTINGS_MUTE_LABEL" = "Utišaj";
+
+/* Indicates that the current thread is not muted. */
+"CONVERSATION_SETTINGS_MUTE_NOT_MUTED" = "Nije utišano";
+
+/* Label for button to mute a thread for a day. */
+"CONVERSATION_SETTINGS_MUTE_ONE_DAY_ACTION" = "Utišaj na jedan dan";
+
+/* Label for button to mute a thread for a hour. */
+"CONVERSATION_SETTINGS_MUTE_ONE_HOUR_ACTION" = "Utišaj na jedan sat";
+
+/* Label for button to mute a thread for a minute. */
+"CONVERSATION_SETTINGS_MUTE_ONE_MINUTE_ACTION" = "Utišaj na jedan minut";
+
+/* Label for button to mute a thread for a week. */
+"CONVERSATION_SETTINGS_MUTE_ONE_WEEK_ACTION" = "Utišaj na jedan tjedan";
+
+/* Label for button to mute a thread for a year. */
+"CONVERSATION_SETTINGS_MUTE_ONE_YEAR_ACTION" = "Utišaj na jednu godinu";
+
+/* Indicates that this thread is muted until a given date or time. Embeds {{The date or time which the thread is muted until}}. */
+"CONVERSATION_SETTINGS_MUTED_UNTIL_FORMAT" = "do %@";
+
+/* Label for button to unmute a thread. */
+"CONVERSATION_SETTINGS_UNMUTE_ACTION" = "Isključi utišavanje";
 
 /* ActionSheet title */
 "CORRUPTED_SESSION_DESCRIPTION" = "Resetovanje sesije će vam omogućiti da primate buduće poruke od %@, ali neće oporaviti već korumpirane poruke.";
@@ -260,10 +320,10 @@
 "EDIT_GROUP_ACTION" = "Uredi grupu";
 
 /* A format for the message of the alert if user tries to add a user to a group who is already in the group.  Embeds {{the blocked user's name or phone number}}. */
-"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_MESSAGE_FORMAT" = "%@ is already a member of this group.";
+"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_MESSAGE_FORMAT" = "%@ je već član ove grupe.";
 
 /* A title of the alert if user tries to add a user to a group who is already in the group. */
-"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_TITLE" = "Already a Group Member";
+"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_TITLE" = "Već je član grupe.";
 
 /* Short name for edit menu item to copy contents of media message. */
 "EDIT_ITEM_COPY_ACTION" = "Kopiraj";
@@ -323,10 +383,13 @@
 "ERROR_DESCRIPTION_MESSAGE_SEND_DISABLED_PREKEY_UPDATE_FAILURES" = "Nije moguće poslati zbog neažuiranih privatnih podatka.";
 
 /* Error mesage indicating that message send failed due to block list */
-"ERROR_DESCRIPTION_MESSAGE_SEND_FAILED_DUE_TO_BLOCK_LIST" = "Failed to message user because you blocked them.";
+"ERROR_DESCRIPTION_MESSAGE_SEND_FAILED_DUE_TO_BLOCK_LIST" = "Neuspješno slanje poruke korisniku jer ste ga blokirali.";
 
 /* Generic error used whenver Signal can't contact the server */
 "ERROR_DESCRIPTION_NO_INTERNET" = "Signal nije u mogućnosti povezati se na internet. Molimo pokušajte sa drugom WiFi ili mobilnom mrežom.";
+
+/* Error indicating that an outgoing message had no valid recipients. */
+"ERROR_DESCRIPTION_NO_VALID_RECIPIENTS" = "Slanje poruke nije uspjelo zbog nedostatka valjanih primatelja.";
 
 /* Error message when attempting to send message */
 "ERROR_DESCRIPTION_SENDING_UNAUTHORIZED" = "Vaš uređaj više nije registriran za vaš telefonski broj. Morate ukloniti i ponovno instalirati Signal.";
@@ -412,8 +475,17 @@
 /* No comment provided by engineer. */
 "GROUP_MEMBER_LEFT" = "%@ je napustio/la grupu.";
 
+/* Button label for the 'call group member' button */
+"GROUP_MEMBERS_CALL" = "Poziv";
+
 /* header for table which lists the members of this group thread */
 "GROUP_MEMBERS_HEADER" = "Članovi grupe";
+
+/* Button label for the 'send message to group member' button */
+"GROUP_MEMBERS_SEND_MESSAGE" = "Pošalji poruku";
+
+/* Button label for the 'show contact info' button */
+"GROUP_MEMBERS_VIEW_CONTACT_INFO" = "Informacije o kontaktu";
 
 /* No comment provided by engineer. */
 "GROUP_REMOVING" = "Napuštanje grupe %@";
@@ -429,6 +501,9 @@
 
 /* No comment provided by engineer. */
 "GROUP_YOU_LEFT" = "Napustili ste grupu.";
+
+/* A label for conversations with blocked users. */
+"HOME_VIEW_BLOCKED_CONTACT_CONVERSATION" = "Blokiran";
 
 /* {{number of hours}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 hours}}'. See other *_TIME_AMOUNT strings */
 "HOURS_TIME_AMOUNT" = "%u sati";
@@ -526,6 +601,9 @@
 /* media picker option to take photo or video */
 "MEDIA_FROM_CAMERA_BUTTON" = "Kamera";
 
+/* action sheet button title when choosing attachment type */
+"MEDIA_FROM_DOCUMENT_PICKER_BUTTON" = "Dokument";
+
 /* media picker option to choose from library */
 "MEDIA_FROM_LIBRARY_BUTTON" = "Foto Galerija";
 
@@ -546,6 +624,12 @@
 
 /* Indicates that this 1:1 conversation has been blocked. */
 "MESSAGES_VIEW_CONTACT_BLOCKED" = "Blokirali ste ovog korisnika";
+
+/* Action sheet title after tapping on failed download. */
+"MESSAGES_VIEW_FAILED_DOWNLOAD_ACTIONSHEET_TITLE" = "Preuzimanje nije uspjelo.";
+
+/* Action sheet button text */
+"MESSAGES_VIEW_FAILED_DOWNLOAD_RETRY_ACTION" = "Preuzmi ponovo";
 
 /* Indicates that a single member of this group has been blocked. */
 "MESSAGES_VIEW_GROUP_1_MEMBER_BLOCKED" = "Blokirali ste 1 člana ove grupe";
@@ -594,6 +678,9 @@
 /* No comment provided by engineer. */
 "MULTIDEVICE_PAIRING_MAX_RECOVERY" = "Dosegli ste maksimalan uređaja koje možete trenutno upariti sa vašim računom. Molimo vas da uklonite uređaj ili pokušajte kasnije upariti ponovo.";
 
+/* An explanation of the consequences of muting a thread. */
+"MUTE_BEHAVIOR_EXPLANATION" = "Nećete primati obavijesti za utišane razgovore.";
+
 /* No comment provided by engineer. */
 "NETWORK_ERROR_RECOVERY" = "Molimo provjerite da li ste na mreži i pokušajte ponovo.";
 
@@ -621,7 +708,7 @@
 /* No comment provided by engineer. */
 "NEW_GROUP_DEFAULT_TITLE" = "Nova grupa";
 
-/* No comment provided by engineer. */
+/* Placeholder text for group name field */
 "NEW_GROUP_NAMEGROUP_REQUEST_DEFAULT" = "Dodijeli naziv ovom grupnom razgovoru";
 
 /* No comment provided by engineer. */
@@ -755,7 +842,7 @@
 "REGISTER_CONTACTS_WELCOME" = "Dobrodošli!";
 
 /* No comment provided by engineer. */
-"REGISTER_FAILED_TRY_AGAIN" = "Pokušajte ponovo";
+"REGISTER_FAILED_TRY_AGAIN" = "Pokušaj ponovo";
 
 /* No comment provided by engineer. */
 "REGISTER_RATE_LIMITING_BODY" = "Pokušali ste previše puta. Molimo pričekajte minut prije novog pokušaja.";
@@ -833,10 +920,16 @@
 "SECURE_SESSION_RESET" = "Sigurna sesija je resetirana.";
 
 /* No comment provided by engineer. */
-"SEND_AGAIN_BUTTON" = "Pošalji ponovo";
+"SEND_AGAIN_BUTTON" = "Šalji ponovo";
 
 /* No comment provided by engineer. */
 "SEND_BUTTON_TITLE" = "Šalji";
+
+/* Header title for the 'send external file' view. */
+"SEND_EXTERNAL_FILE_HEADER_TITLE" = "Select a Recipient for:";
+
+/* Title for the 'send external file' view. */
+"SEND_EXTERNAL_FILE_VIEW_TITLE" = "Send File";
 
 /* Alert body after invite failed */
 "SEND_INVITE_FAILURE" = "Slanje pozivnice nije uspjelo, molimo pokušajte kasnije.";
@@ -866,25 +959,22 @@
 "SETTINGS_ADD_TO_BLOCK_LIST_TITLE" = "Blokiraj";
 
 /* No comment provided by engineer. */
-"SETTINGS_ADVANCED_DEBUGLOG" = "Omogući zapis o neispravnosti";
+"SETTINGS_ADVANCED_DEBUGLOG" = "Omogući zapis neispravnosti";
 
 /* No comment provided by engineer. */
-"SETTINGS_ADVANCED_SUBMIT_DEBUGLOG" = "Podnesi zapis o neispravnosti";
+"SETTINGS_ADVANCED_SUBMIT_DEBUGLOG" = "Podnesi zapis neispravnosti";
 
 /* No comment provided by engineer. */
 "SETTINGS_ADVANCED_TITLE" = "Napredno";
 
 /* A label for the 'add phone number' button in the block list table. */
-"SETTINGS_BLOCK_LIST_ADD_BUTTON" = "Add…";
-
-/* A footer title for the block list table. */
-"SETTINGS_BLOCK_LIST_FOOTER_TITLE" = "Blocked users will not be able to call you or send you messages.";
+"SETTINGS_BLOCK_LIST_ADD_BUTTON" = "Dodaj...";
 
 /* A label that indicates the user has no Signal contacts. */
 "SETTINGS_BLOCK_LIST_NO_CONTACTS" = "Nemate kontakata koji koriste Signal.";
 
 /* Label for the block list section of the settings view */
-"SETTINGS_BLOCK_LIST_TITLE" = "Blokirani";
+"SETTINGS_BLOCK_LIST_TITLE" = "Blokiranje";
 
 /* User settings section footer, a detailed explanation */
 "SETTINGS_BLOCK_ON_IDENITY_CHANGE_DETAIL" = "Zahtijeva vaše odobrenje prije komunikacije sa nekim tko ima novi sigurnosni broj, obično zbog reinstalacije Signala.";
@@ -1015,6 +1105,9 @@
 /* In Inbox view, last message label for thread with corrupted attachment. */
 "UNKNOWN_ATTACHMENT_LABEL" = "Nepoznat privitak";
 
+/* No comment provided by engineer. */
+"UNKNOWN_CONTACT_BLOCK_OFFER" = "Korisnik nije u vašim kontaktima. Da li želite blokirati ovog korisnika?";
+
 /* Displayed if for some reason we can't determine a contacts phone number *or* name */
 "UNKNOWN_CONTACT_NAME" = "Nepoznat kontakt";
 
@@ -1078,11 +1171,8 @@
 /* button text during registration to submit your SMS verification code */
 "VERIFICATION_CHALLENGE_SUBMIT_CODE" = "Potvrdi verifikacijski kôd";
 
-/* Navigation title in the registration flow - during the sms code verification process. */
-"VERIFICATION_HEADER" = "Verifikacija";
-
 /* Label indicating the phone number currently being verified. */
-"VERIFICATION_PHONE_NUMBER_FORMAT" = "Verifikacija: %@";
+"VERIFICATION_PHONE_NUMBER_FORMAT" = "Unesite verifikacijski kôd koji smo poslali na %@.";
 
 /* table cell label in conversation settings */
 "VERIFY_PRIVACY" = "Verifikacija sigurnosnog broja";

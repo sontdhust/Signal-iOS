@@ -16,4 +16,8 @@
                 replacementString:(NSString *)insertionText
                       countryCode:(NSString *)countryCode;
 
++ (void)setAudioIgnoresHardwareMuteSwitch:(BOOL)shouldIgnore;
+
++ (NSString *)formatFileSize:(unsigned long)fileSize;
+
 @end

@@ -9,8 +9,12 @@
 #import "UIFont+OWS.h"
 #import "UIUtil.h"
 #import "UIView+OWS.h"
+#import <SignalServiceKit/TSGroupThread.h>
+#import <SignalServiceKit/TSThread.h>
 
 NS_ASSUME_NONNULL_BEGIN
+
+NSString *const kContactsTable_CellReuseIdentifier = @"kContactsTable_CellReuseIdentifier";
 
 @interface ContactTableViewCell ()
 
@@ -46,9 +50,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)configureProgrammatically
 {
+    const CGFloat kAvatarSize = 40.f;
     _avatarView = [UIImageView new];
-    _avatarView.contentMode = UIViewContentModeScaleToFill;
     _avatarView.image = [UIImage imageNamed:@"empty-group-avatar"];
+    _avatarView.contentMode = UIViewContentModeScaleToFill;
+    // applyRoundedBorderToImageView requires the avatar to have
+    // the correct size.
+    _avatarView.frame = CGRectMake(0, 0, kAvatarSize, kAvatarSize);
+    _avatarView.layer.minificationFilter = kCAFilterTrilinear;
+    _avatarView.layer.magnificationFilter = kCAFilterTrilinear;
     [self.contentView addSubview:_avatarView];
 
     _nameLabel = [UILabel new];
@@ -59,8 +69,8 @@ NS_ASSUME_NONNULL_BEGIN
 
     [_avatarView autoVCenterInSuperview];
     [_avatarView autoPinEdgeToSuperviewEdge:ALEdgeLeft withInset:8.f];
-    [_avatarView autoSetDimension:ALDimensionWidth toSize:40.f];
-    [_avatarView autoSetDimension:ALDimensionHeight toSize:40.f];
+    [_avatarView autoSetDimension:ALDimensionWidth toSize:kAvatarSize];
+    [_avatarView autoSetDimension:ALDimensionHeight toSize:kAvatarSize];
 
     [_nameLabel autoPinEdgeToSuperviewEdge:ALEdgeRight];
     [_nameLabel autoPinEdgeToSuperviewEdge:ALEdgeTop];
@@ -73,8 +83,27 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)configureWithContact:(Contact *)contact contactsManager:(OWSContactsManager *)contactsManager
 {
-    NSMutableAttributedString *attributedText =
-        [[contactsManager formattedFullNameForContact:contact font:self.nameLabel.font] mutableCopy];
+    [self configureWithRecipientId:contact.textSecureIdentifiers.firstObject
+                        avatarName:contact.fullName
+                       displayName:[contactsManager formattedFullNameForContact:contact font:self.nameLabel.font]
+                   contactsManager:contactsManager];
+}
+
+- (void)configureWithRecipientId:(NSString *)recipientId contactsManager:(OWSContactsManager *)contactsManager
+{
+    [self
+        configureWithRecipientId:recipientId
+                      avatarName:@""
+                     displayName:[contactsManager formattedFullNameForRecipientId:recipientId font:self.nameLabel.font]
+                 contactsManager:contactsManager];
+}
+
+- (void)configureWithRecipientId:(NSString *)recipientId
+                      avatarName:(NSString *)avatarName
+                     displayName:(NSAttributedString *)displayName
+                 contactsManager:(OWSContactsManager *)contactsManager
+{
+    NSMutableAttributedString *attributedText = [displayName mutableCopy];
     if (self.accessoryMessage) {
         UILabel *blockedLabel = [[UILabel alloc] init];
         blockedLabel.textAlignment = NSTextAlignmentRight;
@@ -87,9 +116,30 @@ NS_ASSUME_NONNULL_BEGIN
     }
     self.nameLabel.attributedText = attributedText;
     self.avatarView.image =
-        [[[OWSContactAvatarBuilder alloc] initWithContactId:contact.textSecureIdentifiers.firstObject
-                                                       name:contact.fullName
-                                            contactsManager:contactsManager] build];
+        [[[OWSContactAvatarBuilder alloc] initWithContactId:recipientId name:avatarName contactsManager:contactsManager]
+            build];
+
+    // Force layout, since imageView isn't being initally rendered on App Store optimized build.
+    [self layoutSubviews];
+}
+
+- (void)configureWithThread:(TSThread *)thread contactsManager:(OWSContactsManager *)contactsManager
+{
+    OWSAssert(thread);
+
+    NSString *threadName = thread.name;
+    if (threadName.length == 0 && [thread isKindOfClass:[TSGroupThread class]]) {
+        threadName = NSLocalizedString(@"NEW_GROUP_DEFAULT_TITLE", @"");
+    }
+
+    NSAttributedString *attributedText = [[NSAttributedString alloc]
+                                          initWithString:threadName
+                                          attributes:@{
+                                                       NSForegroundColorAttributeName : [UIColor blackColor],
+                                                       }];
+    self.nameLabel.attributedText = attributedText;
+
+    self.avatarView.image = [OWSAvatarBuilder buildImageForThread:thread contactsManager:contactsManager];
 
     // Force layout, since imageView isn't being initally rendered on App Store optimized build.
     [self layoutSubviews];

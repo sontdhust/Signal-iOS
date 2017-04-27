@@ -8,8 +8,9 @@
 #import "UIColor+JSQMessages.h"
 #import "UIColor+OWS.h"
 #import "UIFont+OWS.h"
-#import <JSQMessagesViewController/JSQMessagesBubbleImage.h>
-#import <JSQMessagesViewController/JSQMessagesBubbleImageFactory.h>
+#import "UIView+OWS.h"
+#import "ViewControllerUtils.h"
+#import <JSQMessagesViewController/JSQMessagesMediaViewBubbleImageMasker.h>
 #import <MobileCoreServices/MobileCoreServices.h>
 #import <SignalServiceKit/MimeTypeUtil.h>
 
@@ -21,6 +22,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) TSAttachmentStream *attachment;
 @property (nonatomic, nullable) AttachmentUploadView *attachmentUploadView;
 @property (nonatomic) BOOL incoming;
+
+// See comments on OWSMessageMediaAdapter.
+@property (nonatomic, nullable, weak) id lastPresentingCell;
 
 @end
 
@@ -45,16 +49,23 @@ NS_ASSUME_NONNULL_BEGIN
     return self.attachment.uniqueId;
 }
 
+- (void)clearAllViews
+{
+    [_cachedMediaView removeFromSuperview];
+    _cachedMediaView = nil;
+    _attachmentUploadView = nil;
+}
+
 - (void)clearCachedMediaViews
 {
     [super clearCachedMediaViews];
-    _cachedMediaView = nil;
+    [self clearAllViews];
 }
 
 - (void)setAppliesMediaViewMaskAsOutgoing:(BOOL)appliesMediaViewMaskAsOutgoing
 {
     [super setAppliesMediaViewMaskAsOutgoing:appliesMediaViewMaskAsOutgoing];
-    _cachedMediaView = nil;
+    [self clearAllViews];
 }
 
 // TODO: Should we override hash or mediaHash?
@@ -65,9 +76,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - JSQMessageMediaData protocol
 
+- (CGFloat)bubbleHeight
+{
+    return 45.f;
+}
+
 - (CGFloat)iconSize
 {
-    return 60.f;
+    return 40.f;
 }
 
 - (CGFloat)hMargin
@@ -80,38 +96,30 @@ NS_ASSUME_NONNULL_BEGIN
     return 10.f;
 }
 
-- (UIFont *)attachmentLabelFont
-{
-    return [UIFont ows_regularFontWithSize:11.f];
-}
-
 - (UIView *)mediaView
 {
     if (_cachedMediaView == nil) {
         CGSize viewSize = [self mediaViewDisplaySize];
         UIColor *textColor = (self.incoming ? [UIColor blackColor] : [UIColor whiteColor]);
 
-        JSQMessagesBubbleImageFactory *bubbleFactory = [[JSQMessagesBubbleImageFactory alloc] init];
-        JSQMessagesBubbleImage *bubbleImageData = (self.incoming
-                ? [bubbleFactory incomingMessagesBubbleImageWithColor:[UIColor jsq_messageBubbleLightGrayColor]]
-                : [bubbleFactory outgoingMessagesBubbleImageWithColor:[UIColor ows_materialBlueColor]]);
-        UIImage *bubbleImage = [bubbleImageData messageBubbleImage];
-        OWSAssert(bubbleImage);
-        UIImageView *bubbleImageView = [[UIImageView alloc] initWithImage:bubbleImage];
-        _cachedMediaView = bubbleImageView;
-        _cachedMediaView.frame = CGRectMake(0.f, 0.f, viewSize.width, viewSize.height);
+        _cachedMediaView = [[UIView alloc] initWithFrame:CGRectMake(0.f, 0.f, viewSize.width, viewSize.height)];
+
+        _cachedMediaView.backgroundColor
+            = self.incoming ? [UIColor jsq_messageBubbleLightGrayColor] : [UIColor ows_materialBlueColor];
+        [JSQMessagesMediaViewBubbleImageMasker applyBubbleImageMaskToMediaView:_cachedMediaView
+                                                                    isOutgoing:!self.incoming];
 
         const CGFloat kBubbleTailWidth = 6.f;
         CGRect contentFrame = CGRectMake(self.incoming ? kBubbleTailWidth : 0.f,
             self.vMargin,
-            viewSize.width - kBubbleTailWidth,
+            viewSize.width - kBubbleTailWidth - 10,
             viewSize.height - self.vMargin * 2.f);
 
-        UIImage *image = [UIImage imageNamed:(self.incoming ? @"file-black-60" : @"file-white-60")];
+        UIImage *image = [UIImage imageNamed:(self.incoming ? @"file-black-40" : @"file-white-40")];
         OWSAssert(image);
         UIImageView *imageView = [[UIImageView alloc] initWithImage:image];
-        CGRect iconFrame = CGRectMake(round(contentFrame.origin.x + (contentFrame.size.width - self.iconSize) * 0.5f),
-            round(contentFrame.origin.y),
+        CGRect iconFrame = CGRectMake(round(contentFrame.origin.x + 10.f),
+            round(contentFrame.origin.y + (contentFrame.size.height - self.iconSize) * 0.5f),
             self.iconSize,
             self.iconSize);
         imageView.frame = iconFrame;
@@ -125,35 +133,66 @@ NS_ASSUME_NONNULL_BEGIN
 
         UILabel *fileTypeLabel = [UILabel new];
         fileTypeLabel.text = fileExtension.uppercaseString;
-        fileTypeLabel.textColor = textColor;
+        fileTypeLabel.textColor = [textColor colorWithAlphaComponent:0.85f];
         fileTypeLabel.lineBreakMode = NSLineBreakByTruncatingTail;
         fileTypeLabel.font = [UIFont ows_mediumFontWithSize:20.f];
         fileTypeLabel.adjustsFontSizeToFitWidth = YES;
+        fileTypeLabel.textAlignment = NSTextAlignmentCenter;
         CGRect fileTypeLabelFrame = CGRectZero;
         fileTypeLabelFrame.size = [fileTypeLabel sizeThatFits:CGSizeZero];
-        fileTypeLabelFrame.size.width = ceil(MIN(self.iconSize * 0.45f, fileTypeLabelFrame.size.width));
+        // This dimension depends on the space within the icon boundaries.
+        fileTypeLabelFrame.size.width = 20.f;
         // Center on icon.
         fileTypeLabelFrame.origin.x
             = round(iconFrame.origin.x + (iconFrame.size.width - fileTypeLabelFrame.size.width) * 0.5f);
         fileTypeLabelFrame.origin.y
-            = round(iconFrame.origin.y + (iconFrame.size.height - fileTypeLabelFrame.size.height) * 0.5f + 5);
+            = round(iconFrame.origin.y + (iconFrame.size.height - fileTypeLabelFrame.size.height) * 0.5f);
         fileTypeLabel.frame = fileTypeLabelFrame;
         [_cachedMediaView addSubview:fileTypeLabel];
 
-        UILabel *attachmentLabel = [UILabel new];
-        attachmentLabel.text = NSLocalizedString(@"GENERIC_ATTACHMENT_LABEL", @"A label for generic attachments.");
-        attachmentLabel.textColor = [textColor colorWithAlphaComponent:0.85f];
-        attachmentLabel.lineBreakMode = NSLineBreakByTruncatingTail;
-        attachmentLabel.font = [self attachmentLabelFont];
-        [attachmentLabel sizeToFit];
-        CGRect attachmentLabelFrame = CGRectZero;
-        attachmentLabelFrame.size = attachmentLabel.bounds.size;
-        attachmentLabelFrame.origin.x
-            = round(contentFrame.origin.x + (contentFrame.size.width - attachmentLabelFrame.size.width) * 0.5f);
-        attachmentLabelFrame.origin.y
-            = round(contentFrame.origin.y + contentFrame.size.height - attachmentLabelFrame.size.height);
-        attachmentLabel.frame = attachmentLabelFrame;
-        [_cachedMediaView addSubview:attachmentLabel];
+        const CGFloat kLabelHSpacing = 3;
+        const CGFloat kLabelVSpacing = 2;
+        NSString *topText =
+            [self.attachment.filename stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (topText.length < 1) {
+            topText = [MIMETypeUtil fileExtensionForMIMEType:self.attachment.contentType].uppercaseString;
+        }
+        if (topText.length < 1) {
+            topText = NSLocalizedString(@"GENERIC_ATTACHMENT_LABEL", @"A label for generic attachments.");
+        }
+        UILabel *topLabel = [UILabel new];
+        topLabel.text = topText;
+        topLabel.textColor = textColor;
+        topLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
+        topLabel.font = [UIFont ows_mediumFontWithSize:15.f];
+        [topLabel sizeToFit];
+        [_cachedMediaView addSubview:topLabel];
+
+        NSError *error;
+        unsigned long long fileSize =
+            [[NSFileManager defaultManager] attributesOfItemAtPath:self.attachment.filePath error:&error].fileSize;
+        OWSAssert(!error);
+        NSString *bottomText = [ViewControllerUtils formatFileSize:fileSize];
+        UILabel *bottomLabel = [UILabel new];
+        bottomLabel.text = bottomText;
+        bottomLabel.textColor = [textColor colorWithAlphaComponent:0.85f];
+        bottomLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
+        bottomLabel.font = [UIFont ows_regularFontWithSize:13.f];
+        [bottomLabel sizeToFit];
+        [_cachedMediaView addSubview:bottomLabel];
+
+        CGRect topLabelFrame = CGRectZero;
+        topLabelFrame.size = topLabel.bounds.size;
+        topLabelFrame.origin.x = round(iconFrame.origin.x + iconFrame.size.width + kLabelHSpacing);
+        topLabelFrame.origin.y = round(contentFrame.origin.y
+            + (contentFrame.size.height - (topLabel.frame.size.height + bottomLabel.frame.size.height + kLabelVSpacing))
+                * 0.5f);
+        topLabelFrame.size.width = round((contentFrame.origin.x + contentFrame.size.width) - topLabelFrame.origin.x);
+        topLabel.frame = topLabelFrame;
+
+        CGRect bottomLabelFrame = topLabelFrame;
+        bottomLabelFrame.origin.y += topLabelFrame.size.height + kLabelVSpacing;
+        bottomLabel.frame = bottomLabelFrame;
 
         if (!self.incoming) {
             self.attachmentUploadView = [[AttachmentUploadView alloc] initWithAttachment:self.attachment
@@ -167,8 +206,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (CGSize)mediaViewDisplaySize
 {
-    const CGFloat kVSpacing = 1.f;
-    return CGSizeMake(100, ceil(self.iconSize + self.attachmentLabelFont.lineHeight + kVSpacing + self.vMargin * 2));
+    CGSize size = [super mediaViewDisplaySize];
+    size.height = ceil(self.bubbleHeight + self.vMargin * 2);
+    return size;
 }
 
 #pragma mark - OWSMessageEditing Protocol
@@ -193,6 +233,22 @@ NS_ASSUME_NONNULL_BEGIN
         // Shouldn't get here, as only supported actions should be exposed via canPerformEditingAction
         NSString *actionString = NSStringFromSelector(action);
         DDLogError(@"'%@' action unsupported for %@: attachmentId=%@", actionString, [self class], self.attachmentId);
+    }
+}
+
+#pragma mark - OWSMessageMediaAdapter
+
+- (void)setCellVisible:(BOOL)isVisible
+{
+    // Ignore.
+}
+
+- (void)clearCachedMediaViewsIfLastPresentingCell:(id)cell
+{
+    OWSAssert(cell);
+
+    if (cell == self.lastPresentingCell) {
+        [self clearCachedMediaViews];
     }
 }
 

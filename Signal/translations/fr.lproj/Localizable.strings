@@ -55,17 +55,23 @@
 /* Format string for file extension label in call interstitial view */
 "ATTACHMENT_APPROVAL_FILE_EXTENSION_FORMAT" = "Type de fichier: %@";
 
-/* Format string for file size label in call interstitial view */
-"ATTACHMENT_APPROVAL_FILE_SIZE_FORMAT" = "Taille du fichier: %@";
+/* Format string for file size label in call interstitial view. Embeds: {{file size as 'N mb' or 'N kb'}}. */
+"ATTACHMENT_APPROVAL_FILE_SIZE_FORMAT" = "Taille: %@";
 
 /* Label for 'send' button in the 'attachment approval' dialog. */
 "ATTACHMENT_APPROVAL_SEND_BUTTON" = "Envoyer";
 
-/* No comment provided by engineer. */
-"ATTACHMENT_DOWNLOAD_FAILED" = "Le téléchargement de la pièce jointe a échoué, appuyez pour réessayer.";
+/* Generic filename for an attachment with no known name */
+"ATTACHMENT_DEFAULT_FILENAME" = "Pièce jointe";
 
-/* No comment provided by engineer. */
-"ATTACHMENT_DOWNLOADING" = "Pièce jointe en téléchargement";
+/* Status label when an attachment download has failed. */
+"ATTACHMENT_DOWNLOADING_STATUS_FAILED" = "Échoué. Cliquer pour réessayer.";
+
+/* Status label when an attachment is currently downloading */
+"ATTACHMENT_DOWNLOADING_STATUS_IN_PROGRESS" = "Téléchargement...";
+
+/* Status label when an attachment is enqueued, but hasn't yet started downloading */
+"ATTACHMENT_DOWNLOADING_STATUS_QUEUED" = "En file d'attente";
 
 /* The title of the 'attachment error' alert. */
 "ATTACHMENT_ERROR_ALERT_TITLE" = "Erreur lors de l'envoi de pièces jointes";
@@ -88,62 +94,92 @@
 /* Attachment error message for attachments without any data */
 "ATTACHMENT_ERROR_MISSING_DATA" = "La pièce jointe est vide.";
 
+/* Attachment error message for attachments with an invalid file format */
+"ATTACHMENT_ERROR_UNKNOWN_TYPE" = "Attachment is of invalid type";
+
 /* Accessibility hint describing what you can do with the attachment button */
 "ATTACHMENT_HINT" = "Choisissez ou prenez une photo puis envoyez-la";
 
 /* Accessibility label for attaching photos */
 "ATTACHMENT_LABEL" = "Pièce jointe";
 
-/* No comment provided by engineer. */
-"ATTACHMENT_QUEUED" = "Nouvelle pièce jointe prête à télécharger.";
+/* Alert title when picking a document fails for an unknown reason */
+"ATTACHMENT_PICKER_DOCUMENTS_FAILED_ALERT_TITLE" = "Impossible de choisir le document.";
+
+/* Alert body when picking a document fails because user picked a directory/bundle */
+"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_BODY" = "Signal can't handle that file as is. Try zipping it before sending.";
+
+/* Alert title when picking a document fails because user picked a directory/bundle */
+"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_TITLE" = "Unsupported File";
+
+/* An explanation of the consequences of blocking another user. */
+"BLOCK_BEHAVIOR_EXPLANATION" = "Les utilisateurs bloqués ne pourront pas vous appeler ou vous envoyer des messages.";
 
 /* Button label for the 'block' button */
-"BLOCK_LIST_BLOCK_BUTTON" = "Block";
+"BLOCK_LIST_BLOCK_BUTTON" = "Bloquer";
 
 /* A format for the 'block user' action sheet title. Embeds {{the blocked user's name or phone number}}. */
-"BLOCK_LIST_BLOCK_TITLE_FORMAT" = "Block %@?";
+"BLOCK_LIST_BLOCK_TITLE_FORMAT" = "Bloquer %@?";
 
 /* Button label for the 'unblock' button */
-"BLOCK_LIST_UNBLOCK_BUTTON" = "Unblock";
+"BLOCK_LIST_UNBLOCK_BUTTON" = "Débloquer";
 
 /* A format for the 'unblock user' action sheet title. Embeds {{the blocked user's name or phone number}}. */
-"BLOCK_LIST_UNBLOCK_TITLE_FORMAT" = "Unblock %@?";
+"BLOCK_LIST_UNBLOCK_TITLE_FORMAT" = "Débloquer %@?";
 
 /* A format for the message of the alert if user tries to block a user who is already blocked.  Embeds {{the blocked user's name or phone number}}. */
-"BLOCK_LIST_VIEW_ALREADY_BLOCKED_ALERT_MESSAGE_FORMAT" = "%@ is already blocked.";
+"BLOCK_LIST_VIEW_ALREADY_BLOCKED_ALERT_MESSAGE_FORMAT" = "%@ est déjà bloqué.";
 
 /* A title of the alert if user tries to block a user who is already blocked. */
-"BLOCK_LIST_VIEW_ALREADY_BLOCKED_ALERT_TITLE" = "Already Blocked";
+"BLOCK_LIST_VIEW_ALREADY_BLOCKED_ALERT_TITLE" = "Déjà Bloqué";
 
 /* A label for the block button in the block list view */
-"BLOCK_LIST_VIEW_BLOCK_BUTTON" = "Block";
+"BLOCK_LIST_VIEW_BLOCK_BUTTON" = "Bloquer";
 
 /* The title of the 'block user failed' alert. */
-"BLOCK_LIST_VIEW_BLOCK_FAILED_ALERT_MESSAGE" = "Failed to Block User.";
+"BLOCK_LIST_VIEW_BLOCK_FAILED_ALERT_MESSAGE" = "Impossible de bloquer l'utilisateur.";
 
 /* The title of the 'block user failed' alert. */
-"BLOCK_LIST_VIEW_BLOCK_FAILED_ALERT_TITLE" = "Error";
+"BLOCK_LIST_VIEW_BLOCK_FAILED_ALERT_TITLE" = "Erreur";
 
 /* The message format of the 'user blocked' alert. Embeds {{the blocked user's name or phone number}}. */
-"BLOCK_LIST_VIEW_BLOCKED_ALERT_MESSAGE_FORMAT" = "%@ has been blocked";
+"BLOCK_LIST_VIEW_BLOCKED_ALERT_MESSAGE_FORMAT" = "%@ a été bloqué";
 
 /* The title of the 'user blocked' alert. */
-"BLOCK_LIST_VIEW_BLOCKED_ALERT_TITLE" = "User Blocked";
+"BLOCK_LIST_VIEW_BLOCKED_ALERT_TITLE" = "Utilisateur Bloqué";
+
+/* The message of the 'You can't block yourself' alert. */
+"BLOCK_LIST_VIEW_CANT_BLOCK_SELF_ALERT_MESSAGE" = "Vous ne pouvez pas vous bloquer.";
+
+/* The title of the 'You can't block yourself' alert. */
+"BLOCK_LIST_VIEW_CANT_BLOCK_SELF_ALERT_TITLE" = "Erreur";
 
 /* A title for the contacts section of the block list view. */
 "BLOCK_LIST_VIEW_CONTACTS_SECTION_TITLE" = "Contacts";
 
 /* The title of the 'unblock user failed' alert. */
-"BLOCK_LIST_VIEW_UNBLOCK_FAILED_ALERT_MESSAGE" = "Failed to Unblock User.";
+"BLOCK_LIST_VIEW_UNBLOCK_FAILED_ALERT_MESSAGE" = "Impossible de débloquer l'utilisateur.";
 
 /* The title of the 'unblock user failed' alert. */
-"BLOCK_LIST_VIEW_UNBLOCK_FAILED_ALERT_TITLE" = "Error";
+"BLOCK_LIST_VIEW_UNBLOCK_FAILED_ALERT_TITLE" = "Erreur";
 
 /* The message format of the 'user unblocked' alert. Embeds {{the blocked user's name or phone number}}. */
-"BLOCK_LIST_VIEW_UNBLOCKED_ALERT_MESSAGE_FORMAT" = "%@ has been unblocked.";
+"BLOCK_LIST_VIEW_UNBLOCKED_ALERT_MESSAGE_FORMAT" = "%@ a été débloqué.";
 
 /* The title of the 'user unblocked' alert. */
-"BLOCK_LIST_VIEW_UNBLOCKED_ALERT_TITLE" = "User Unblocked";
+"BLOCK_LIST_VIEW_UNBLOCKED_ALERT_TITLE" = "Utilisateur Débloqué";
+
+/* Action sheet that will block an unknown user. */
+"BLOCK_OFFER_ACTIONSHEET_BLOCK_ACTION" = "Bloquer";
+
+/* Title format for action sheet that offers to block an unknown user.Embeds {{the unknown user's name or phone number}}. */
+"BLOCK_OFFER_ACTIONSHEET_TITLE_FORMAT" = "Bloquer %@?";
+
+/* Alert message when calling and permissions for microphone are missing */
+"CALL_AUDIO_PERMISSION_MESSAGE" = "Signal nécessite l'accès à votre microphone pour effectuer des appels. Vous pouvez accorder cette autorisation dans les Paramètres de l'application.";
+
+/* Alert title when calling and permissions for microphone are missing */
+"CALL_AUDIO_PERMISSION_TITLE" = "Accès au microphone requis";
 
 /* Accessibilty label for placing call button */
 "CALL_LABEL" = "Appel";
@@ -194,10 +230,10 @@
 "CONFIRMATION_TITLE" = "Confirmer";
 
 /* An indicator that a contact has been blocked. */
-"CONTACT_CELL_IS_BLOCKED" = "Blocked";
+"CONTACT_CELL_IS_BLOCKED" = "Bloqué";
 
 /* An indicator that a contact is a member of the current group. */
-"CONTACT_CELL_IS_IN_GROUP" = "Group Member";
+"CONTACT_CELL_IS_IN_GROUP" = "Membres du groupe";
 
 /* No comment provided by engineer. */
 "CONTACT_DETAIL_COMM_TYPE_INSECURE" = "Numéro non enregistré";
@@ -212,13 +248,37 @@
 "CONVERSATION_SETTINGS" = "Paramètres de cette conversation";
 
 /* table cell label in conversation settings */
-"CONVERSATION_SETTINGS_BLOCK_THIS_USER" = "Block this user";
+"CONVERSATION_SETTINGS_BLOCK_THIS_USER" = "Bloquer cet utilisateur";
 
-/* The message of the 'text message too large' alert. */
-"CONVERSATION_VIEW_TEXT_MESSAGE_TOO_LARGE_ALERT_MESSAGE" = "Ce message est trop long à envoyer.";
+/* Title of the 'mute this thread' action sheet. */
+"CONVERSATION_SETTINGS_MUTE_ACTION_SHEET_TITLE" = "Muet";
 
-/* The title of the 'text message too large' alert. */
-"CONVERSATION_VIEW_TEXT_MESSAGE_TOO_LARGE_ALERT_TITLE" = "Erreur";
+/* label for 'mute thread' cell in conversation settings */
+"CONVERSATION_SETTINGS_MUTE_LABEL" = "Muet";
+
+/* Indicates that the current thread is not muted. */
+"CONVERSATION_SETTINGS_MUTE_NOT_MUTED" = "Non silencieux";
+
+/* Label for button to mute a thread for a day. */
+"CONVERSATION_SETTINGS_MUTE_ONE_DAY_ACTION" = "Muet pour un jour";
+
+/* Label for button to mute a thread for a hour. */
+"CONVERSATION_SETTINGS_MUTE_ONE_HOUR_ACTION" = "Muet pour une heure";
+
+/* Label for button to mute a thread for a minute. */
+"CONVERSATION_SETTINGS_MUTE_ONE_MINUTE_ACTION" = "Muet pour une minute";
+
+/* Label for button to mute a thread for a week. */
+"CONVERSATION_SETTINGS_MUTE_ONE_WEEK_ACTION" = "Muet pour une semaine";
+
+/* Label for button to mute a thread for a year. */
+"CONVERSATION_SETTINGS_MUTE_ONE_YEAR_ACTION" = "Muet pour un an";
+
+/* Indicates that this thread is muted until a given date or time. Embeds {{The date or time which the thread is muted until}}. */
+"CONVERSATION_SETTINGS_MUTED_UNTIL_FORMAT" = "jusqu'à %@";
+
+/* Label for button to unmute a thread. */
+"CONVERSATION_SETTINGS_UNMUTE_ACTION" = "Rendre la parole";
 
 /* ActionSheet title */
 "CORRUPTED_SESSION_DESCRIPTION" = "La réinitialisation de votre session vous permettra de recevoir des messages futurs de %@ , mais elle ne récupérera pas les messages déjà corrompus.";
@@ -260,10 +320,10 @@
 "EDIT_GROUP_ACTION" = "Modifier le groupe";
 
 /* A format for the message of the alert if user tries to add a user to a group who is already in the group.  Embeds {{the blocked user's name or phone number}}. */
-"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_MESSAGE_FORMAT" = "%@ is already a member of this group.";
+"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_MESSAGE_FORMAT" = "%@ est déjà un membre de ce groupe.";
 
 /* A title of the alert if user tries to add a user to a group who is already in the group. */
-"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_TITLE" = "Already a Group Member";
+"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_TITLE" = "Déjà membre du groupe";
 
 /* Short name for edit menu item to copy contents of media message. */
 "EDIT_ITEM_COPY_ACTION" = "Copy";
@@ -323,10 +383,13 @@
 "ERROR_DESCRIPTION_MESSAGE_SEND_DISABLED_PREKEY_UPDATE_FAILURES" = "Impossible d'envoyer en raison de données de confidentialité vaines.";
 
 /* Error mesage indicating that message send failed due to block list */
-"ERROR_DESCRIPTION_MESSAGE_SEND_FAILED_DUE_TO_BLOCK_LIST" = "Failed to message user because you blocked them.";
+"ERROR_DESCRIPTION_MESSAGE_SEND_FAILED_DUE_TO_BLOCK_LIST" = "Echec du message, parce que vous avez bloqué cet utilisateur.";
 
 /* Generic error used whenver Signal can't contact the server */
 "ERROR_DESCRIPTION_NO_INTERNET" = "Signal n'a pas pu se connecter à Internet. Essayez un autre réseau WiFi ou utilisez des données mobiles.";
+
+/* Error indicating that an outgoing message had no valid recipients. */
+"ERROR_DESCRIPTION_NO_VALID_RECIPIENTS" = "L'envoi de message a échoué en raison d'un manque de destinataires valides.";
 
 /* Error message when attempting to send message */
 "ERROR_DESCRIPTION_SENDING_UNAUTHORIZED" = "Votre appareil n'est plus enregistré pour votre numéro de téléphone. Vous devez supprimer et réinstaller Signal.";
@@ -389,7 +452,7 @@
 "GENERIC_ATTACHMENT_DEFAULT_TYPE" = "?";
 
 /* A label for generic attachments. */
-"GENERIC_ATTACHMENT_LABEL" = "Attachment";
+"GENERIC_ATTACHMENT_LABEL" = "Pièce jointe";
 
 /* No comment provided by engineer. */
 "GROUP_AVATAR_CHANGED" = "Avatar modifié.";
@@ -412,8 +475,17 @@
 /* No comment provided by engineer. */
 "GROUP_MEMBER_LEFT" = "%@ a quitté le groupe.";
 
+/* Button label for the 'call group member' button */
+"GROUP_MEMBERS_CALL" = "Appel";
+
 /* header for table which lists the members of this group thread */
 "GROUP_MEMBERS_HEADER" = "Membres du groupe";
+
+/* Button label for the 'send message to group member' button */
+"GROUP_MEMBERS_SEND_MESSAGE" = "Envoyer le message";
+
+/* Button label for the 'show contact info' button */
+"GROUP_MEMBERS_VIEW_CONTACT_INFO" = "Informations de contact";
 
 /* No comment provided by engineer. */
 "GROUP_REMOVING" = "Sortie du groupe %@";
@@ -429,6 +501,9 @@
 
 /* No comment provided by engineer. */
 "GROUP_YOU_LEFT" = "Vous avez quitté le groupe.";
+
+/* A label for conversations with blocked users. */
+"HOME_VIEW_BLOCKED_CONTACT_CONVERSATION" = "Bloqué";
 
 /* {{number of hours}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 hours}}'. See other *_TIME_AMOUNT strings */
 "HOURS_TIME_AMOUNT" = "%u heures";
@@ -526,6 +601,9 @@
 /* media picker option to take photo or video */
 "MEDIA_FROM_CAMERA_BUTTON" = "Caméra";
 
+/* action sheet button title when choosing attachment type */
+"MEDIA_FROM_DOCUMENT_PICKER_BUTTON" = "Document";
+
 /* media picker option to choose from library */
 "MEDIA_FROM_LIBRARY_BUTTON" = "Galerie de photos";
 
@@ -545,13 +623,19 @@
 "MESSAGE_STATUS_UPLOADING" = "En cours de chargement...";
 
 /* Indicates that this 1:1 conversation has been blocked. */
-"MESSAGES_VIEW_CONTACT_BLOCKED" = "You Blocked this User";
+"MESSAGES_VIEW_CONTACT_BLOCKED" = "Vous avez bloqué cet utilisateur";
+
+/* Action sheet title after tapping on failed download. */
+"MESSAGES_VIEW_FAILED_DOWNLOAD_ACTIONSHEET_TITLE" = "Téléchargement Echoué.";
+
+/* Action sheet button text */
+"MESSAGES_VIEW_FAILED_DOWNLOAD_RETRY_ACTION" = "Télécharger de nouveau";
 
 /* Indicates that a single member of this group has been blocked. */
-"MESSAGES_VIEW_GROUP_1_MEMBER_BLOCKED" = "You Blocked 1 Member of this Group";
+"MESSAGES_VIEW_GROUP_1_MEMBER_BLOCKED" = "Vous avez bloqué 1 membre de ce groupe";
 
 /* Indicates that some members of this group has been blocked. Embeds {{the number of blocked users in this group}}. */
-"MESSAGES_VIEW_GROUP_N_MEMBERS_BLOCKED_FORMAT" = "You Blocked %d Members of this Group";
+"MESSAGES_VIEW_GROUP_N_MEMBERS_BLOCKED_FORMAT" = "Vous avez bloqué %d Membres de ce groupe";
 
 /* The subtitle for the messages view title indicates that the title can be tapped to access settings for this conversation. */
 "MESSAGES_VIEW_TITLE_SUBTITLE" = "Appuyez ici pour les paramètres";
@@ -594,6 +678,9 @@
 /* No comment provided by engineer. */
 "MULTIDEVICE_PAIRING_MAX_RECOVERY" = "Vous avez atteint le nombre maximum d'appareils connectés à votre compte. Veuillez enlever un appareil, ou essayer à nouveau ultérieurement.";
 
+/* An explanation of the consequences of muting a thread. */
+"MUTE_BEHAVIOR_EXPLANATION" = "Vous ne recevrez pas de notifications pour les conversations silencieuses.";
+
 /* No comment provided by engineer. */
 "NETWORK_ERROR_RECOVERY" = "Merci de vérifier que vous êtes en ligne et essayer à nouveau.";
 
@@ -621,7 +708,7 @@
 /* No comment provided by engineer. */
 "NEW_GROUP_DEFAULT_TITLE" = "Nouveau groupe";
 
-/* No comment provided by engineer. */
+/* Placeholder text for group name field */
 "NEW_GROUP_NAMEGROUP_REQUEST_DEFAULT" = "Nommer ce groupe de discussion";
 
 /* No comment provided by engineer. */
@@ -677,7 +764,7 @@
 "OUTGOING_INCOMPLETE_CALL" = "Appel sortant incomplet";
 
 /* A display format for oversize text messages. */
-"OVERSIZE_TEXT_DISPLAY_FORMAT" = "%@… [Tap For More]";
+"OVERSIZE_TEXT_DISPLAY_FORMAT" = "%@ ... [Tapez pour plus d'informations]";
 
 /* The title of the 'oversize text message' view. */
 "OVERSIZE_TEXT_MESSAGE_VIEW_TITLE" = "Message";
@@ -755,7 +842,7 @@
 "REGISTER_CONTACTS_WELCOME" = "Bienvenue !";
 
 /* No comment provided by engineer. */
-"REGISTER_FAILED_TRY_AGAIN" = "Veuillez réessayer";
+"REGISTER_FAILED_TRY_AGAIN" = "Réessayer";
 
 /* No comment provided by engineer. */
 "REGISTER_RATE_LIMITING_BODY" = "Vous avez essayé trop souvent. Attendez une minute avant de réessayer.";
@@ -833,10 +920,16 @@
 "SECURE_SESSION_RESET" = "La session sécurisée a été réinitialisée.";
 
 /* No comment provided by engineer. */
-"SEND_AGAIN_BUTTON" = "Renvoyer";
+"SEND_AGAIN_BUTTON" = "Envoyer à nouveau";
 
 /* No comment provided by engineer. */
 "SEND_BUTTON_TITLE" = "Envoyer";
+
+/* Header title for the 'send external file' view. */
+"SEND_EXTERNAL_FILE_HEADER_TITLE" = "Select a Recipient for:";
+
+/* Title for the 'send external file' view. */
+"SEND_EXTERNAL_FILE_VIEW_TITLE" = "Send File";
 
 /* Alert body after invite failed */
 "SEND_INVITE_FAILURE" = "Échec de l'envoi de l'invitation. Veuillez réessayer plus tard. ";
@@ -857,13 +950,13 @@
 "SETTINGS_ABOUT" = "A propos de";
 
 /* Title for the 'block contact' section of the 'add to block list' view. */
-"SETTINGS_ADD_TO_BLOCK_LIST_BLOCK_CONTACT_TITLE" = "Block Contact";
+"SETTINGS_ADD_TO_BLOCK_LIST_BLOCK_CONTACT_TITLE" = "Bloquer le contact";
 
 /* Title for the 'block phone number' section of the 'add to block list' view. */
-"SETTINGS_ADD_TO_BLOCK_LIST_BLOCK_PHONE_NUMBER_TITLE" = "Block Phone Number";
+"SETTINGS_ADD_TO_BLOCK_LIST_BLOCK_PHONE_NUMBER_TITLE" = "Bloquer numéro de téléphone";
 
 /* Title for the 'add to block list' view. */
-"SETTINGS_ADD_TO_BLOCK_LIST_TITLE" = "Block";
+"SETTINGS_ADD_TO_BLOCK_LIST_TITLE" = "Bloquer";
 
 /* No comment provided by engineer. */
 "SETTINGS_ADVANCED_DEBUGLOG" = "Activer le log de débuggage";
@@ -875,16 +968,13 @@
 "SETTINGS_ADVANCED_TITLE" = "Avancé";
 
 /* A label for the 'add phone number' button in the block list table. */
-"SETTINGS_BLOCK_LIST_ADD_BUTTON" = "Add…";
-
-/* A footer title for the block list table. */
-"SETTINGS_BLOCK_LIST_FOOTER_TITLE" = "Blocked users will not be able to call you or send you messages.";
+"SETTINGS_BLOCK_LIST_ADD_BUTTON" = "Ajouter...";
 
 /* A label that indicates the user has no Signal contacts. */
-"SETTINGS_BLOCK_LIST_NO_CONTACTS" = "You have no contacts on Signal.";
+"SETTINGS_BLOCK_LIST_NO_CONTACTS" = "Vous n'avez aucun contact sur Signal.";
 
 /* Label for the block list section of the settings view */
-"SETTINGS_BLOCK_LIST_TITLE" = "Blocked";
+"SETTINGS_BLOCK_LIST_TITLE" = "Bloqué";
 
 /* User settings section footer, a detailed explanation */
 "SETTINGS_BLOCK_ON_IDENITY_CHANGE_DETAIL" = "Nécessite votre approbation avant de communiquer avec quelqu'un qui a un nouveau numéro de sécurité, généralement à partir d'une réinstallation de Signal.";
@@ -1015,6 +1105,9 @@
 /* In Inbox view, last message label for thread with corrupted attachment. */
 "UNKNOWN_ATTACHMENT_LABEL" = "Pièce jointe inconnue";
 
+/* No comment provided by engineer. */
+"UNKNOWN_CONTACT_BLOCK_OFFER" = "L'utilisateur n'est pas dans vos contacts. Voulez-vous bloquer cet utilisateur?";
+
 /* Displayed if for some reason we can't determine a contacts phone number *or* name */
 "UNKNOWN_CONTACT_NAME" = "Contact Inconnu";
 
@@ -1078,11 +1171,8 @@
 /* button text during registration to submit your SMS verification code */
 "VERIFICATION_CHALLENGE_SUBMIT_CODE" = "Envoyer le code de vérification";
 
-/* Navigation title in the registration flow - during the sms code verification process. */
-"VERIFICATION_HEADER" = "Vérifier";
-
 /* Label indicating the phone number currently being verified. */
-"VERIFICATION_PHONE_NUMBER_FORMAT" = "Vérification: %@";
+"VERIFICATION_PHONE_NUMBER_FORMAT" = "Entrez le code de vérification que nous avons envoyé à %@.";
 
 /* table cell label in conversation settings */
 "VERIFY_PRIVACY" = "Vérifier le numéro de sécurité";

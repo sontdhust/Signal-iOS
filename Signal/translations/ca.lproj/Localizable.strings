@@ -55,17 +55,23 @@
 /* Format string for file extension label in call interstitial view */
 "ATTACHMENT_APPROVAL_FILE_EXTENSION_FORMAT" = "Tipus de fitxer: %@";
 
-/* Format string for file size label in call interstitial view */
-"ATTACHMENT_APPROVAL_FILE_SIZE_FORMAT" = "Mida del fitxer: %@";
+/* Format string for file size label in call interstitial view. Embeds: {{file size as 'N mb' or 'N kb'}}. */
+"ATTACHMENT_APPROVAL_FILE_SIZE_FORMAT" = "Mida: %@";
 
 /* Label for 'send' button in the 'attachment approval' dialog. */
 "ATTACHMENT_APPROVAL_SEND_BUTTON" = "Envia";
 
-/* No comment provided by engineer. */
-"ATTACHMENT_DOWNLOAD_FAILED" = "Error en baixar el fitxer adjunt, toqueu per provar de nou.";
+/* Generic filename for an attachment with no known name */
+"ATTACHMENT_DEFAULT_FILENAME" = "Attachment";
 
-/* No comment provided by engineer. */
-"ATTACHMENT_DOWNLOADING" = "S'està baixant el fitxer adjunt";
+/* Status label when an attachment download has failed. */
+"ATTACHMENT_DOWNLOADING_STATUS_FAILED" = "Failed. Tap to retry.";
+
+/* Status label when an attachment is currently downloading */
+"ATTACHMENT_DOWNLOADING_STATUS_IN_PROGRESS" = "Downloading...";
+
+/* Status label when an attachment is enqueued, but hasn't yet started downloading */
+"ATTACHMENT_DOWNLOADING_STATUS_QUEUED" = "Queued";
 
 /* The title of the 'attachment error' alert. */
 "ATTACHMENT_ERROR_ALERT_TITLE" = "Error en enviar l'adjunt";
@@ -88,14 +94,26 @@
 /* Attachment error message for attachments without any data */
 "ATTACHMENT_ERROR_MISSING_DATA" = "El fitxer adjunt és buit.";
 
+/* Attachment error message for attachments with an invalid file format */
+"ATTACHMENT_ERROR_UNKNOWN_TYPE" = "Attachment is of invalid type";
+
 /* Accessibility hint describing what you can do with the attachment button */
 "ATTACHMENT_HINT" = "Trieu o feu una foto i, després, envieu-la";
 
 /* Accessibility label for attaching photos */
 "ATTACHMENT_LABEL" = "Fitxer adjunt";
 
-/* No comment provided by engineer. */
-"ATTACHMENT_QUEUED" = "El fitxer adjunt s'ha posat en cua per obtindre'l.";
+/* Alert title when picking a document fails for an unknown reason */
+"ATTACHMENT_PICKER_DOCUMENTS_FAILED_ALERT_TITLE" = "Failed to choose document.";
+
+/* Alert body when picking a document fails because user picked a directory/bundle */
+"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_BODY" = "Signal can't handle that file as is. Try zipping it before sending.";
+
+/* Alert title when picking a document fails because user picked a directory/bundle */
+"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_TITLE" = "Unsupported File";
+
+/* An explanation of the consequences of blocking another user. */
+"BLOCK_BEHAVIOR_EXPLANATION" = "Els usuaris blocats no podran telefonar-vos ni enviar-vos missatges.";
 
 /* Button label for the 'block' button */
 "BLOCK_LIST_BLOCK_BUTTON" = "Bloca";
@@ -130,6 +148,12 @@
 /* The title of the 'user blocked' alert. */
 "BLOCK_LIST_VIEW_BLOCKED_ALERT_TITLE" = "Usuari blocat";
 
+/* The message of the 'You can't block yourself' alert. */
+"BLOCK_LIST_VIEW_CANT_BLOCK_SELF_ALERT_MESSAGE" = "No podeu blocar-vos.";
+
+/* The title of the 'You can't block yourself' alert. */
+"BLOCK_LIST_VIEW_CANT_BLOCK_SELF_ALERT_TITLE" = "Error";
+
 /* A title for the contacts section of the block list view. */
 "BLOCK_LIST_VIEW_CONTACTS_SECTION_TITLE" = "Contactes";
 
@@ -144,6 +168,18 @@
 
 /* The title of the 'user unblocked' alert. */
 "BLOCK_LIST_VIEW_UNBLOCKED_ALERT_TITLE" = "Usuari desblocat";
+
+/* Action sheet that will block an unknown user. */
+"BLOCK_OFFER_ACTIONSHEET_BLOCK_ACTION" = "Bloca";
+
+/* Title format for action sheet that offers to block an unknown user.Embeds {{the unknown user's name or phone number}}. */
+"BLOCK_OFFER_ACTIONSHEET_TITLE_FORMAT" = "Voleu blocar %@?";
+
+/* Alert message when calling and permissions for microphone are missing */
+"CALL_AUDIO_PERMISSION_MESSAGE" = "El Signal necessita accés al micròfon per a fer telefonades. Podeu donar-li permisos a la Configuració del sistema.";
+
+/* Alert title when calling and permissions for microphone are missing */
+"CALL_AUDIO_PERMISSION_TITLE" = "Es necessita accés al micròfon";
 
 /* Accessibilty label for placing call button */
 "CALL_LABEL" = "Telefona";
@@ -194,10 +230,10 @@
 "CONFIRMATION_TITLE" = "Confirmació";
 
 /* An indicator that a contact has been blocked. */
-"CONTACT_CELL_IS_BLOCKED" = "Blocked";
+"CONTACT_CELL_IS_BLOCKED" = "Blocat";
 
 /* An indicator that a contact is a member of the current group. */
-"CONTACT_CELL_IS_IN_GROUP" = "Group Member";
+"CONTACT_CELL_IS_IN_GROUP" = "Membre del grup";
 
 /* No comment provided by engineer. */
 "CONTACT_DETAIL_COMM_TYPE_INSECURE" = "Número sense registrar";
@@ -214,11 +250,35 @@
 /* table cell label in conversation settings */
 "CONVERSATION_SETTINGS_BLOCK_THIS_USER" = "Bloca aquest usuari";
 
-/* The message of the 'text message too large' alert. */
-"CONVERSATION_VIEW_TEXT_MESSAGE_TOO_LARGE_ALERT_MESSAGE" = "Aquest missatge és massa llarg.";
+/* Title of the 'mute this thread' action sheet. */
+"CONVERSATION_SETTINGS_MUTE_ACTION_SHEET_TITLE" = "Mute";
 
-/* The title of the 'text message too large' alert. */
-"CONVERSATION_VIEW_TEXT_MESSAGE_TOO_LARGE_ALERT_TITLE" = "Error";
+/* label for 'mute thread' cell in conversation settings */
+"CONVERSATION_SETTINGS_MUTE_LABEL" = "Mute";
+
+/* Indicates that the current thread is not muted. */
+"CONVERSATION_SETTINGS_MUTE_NOT_MUTED" = "Not muted";
+
+/* Label for button to mute a thread for a day. */
+"CONVERSATION_SETTINGS_MUTE_ONE_DAY_ACTION" = "Mute for one day";
+
+/* Label for button to mute a thread for a hour. */
+"CONVERSATION_SETTINGS_MUTE_ONE_HOUR_ACTION" = "Mute for one hour";
+
+/* Label for button to mute a thread for a minute. */
+"CONVERSATION_SETTINGS_MUTE_ONE_MINUTE_ACTION" = "Mute for one minute";
+
+/* Label for button to mute a thread for a week. */
+"CONVERSATION_SETTINGS_MUTE_ONE_WEEK_ACTION" = "Mute for one week";
+
+/* Label for button to mute a thread for a year. */
+"CONVERSATION_SETTINGS_MUTE_ONE_YEAR_ACTION" = "Mute for one year";
+
+/* Indicates that this thread is muted until a given date or time. Embeds {{The date or time which the thread is muted until}}. */
+"CONVERSATION_SETTINGS_MUTED_UNTIL_FORMAT" = "until %@";
+
+/* Label for button to unmute a thread. */
+"CONVERSATION_SETTINGS_UNMUTE_ACTION" = "Unmute";
 
 /* ActionSheet title */
 "CORRUPTED_SESSION_DESCRIPTION" = "Restablir la sessió us permetrà tornar a rebre missatges de %@, però no recuperareu cap missatge que ja sigui corromput.";
@@ -260,10 +320,10 @@
 "EDIT_GROUP_ACTION" = "Edita el grup";
 
 /* A format for the message of the alert if user tries to add a user to a group who is already in the group.  Embeds {{the blocked user's name or phone number}}. */
-"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_MESSAGE_FORMAT" = "%@ is already a member of this group.";
+"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_MESSAGE_FORMAT" = "%@ ja és membre d'aquest grup.";
 
 /* A title of the alert if user tries to add a user to a group who is already in the group. */
-"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_TITLE" = "Already a Group Member";
+"EDIT_GROUP_VIEW_ALREADY_IN_GROUP_ALERT_TITLE" = "Ja és membre del grup";
 
 /* Short name for edit menu item to copy contents of media message. */
 "EDIT_ITEM_COPY_ACTION" = "Copia";
@@ -323,10 +383,13 @@
 "ERROR_DESCRIPTION_MESSAGE_SEND_DISABLED_PREKEY_UPDATE_FAILURES" = "No s'ha pogut enviar degut a dades de privadesa obsoletes.";
 
 /* Error mesage indicating that message send failed due to block list */
-"ERROR_DESCRIPTION_MESSAGE_SEND_FAILED_DUE_TO_BLOCK_LIST" = "Failed to message user because you blocked them.";
+"ERROR_DESCRIPTION_MESSAGE_SEND_FAILED_DUE_TO_BLOCK_LIST" = "No s'ha pogut enviar el missatge perquè heu blocat l'usuari.";
 
 /* Generic error used whenver Signal can't contact the server */
 "ERROR_DESCRIPTION_NO_INTERNET" = "El Signal no s'ha pogut connectar a Internet. Proveu des d'altra xarxa WiFi o utilitzeu dades mòbils.";
+
+/* Error indicating that an outgoing message had no valid recipients. */
+"ERROR_DESCRIPTION_NO_VALID_RECIPIENTS" = "Message send failed due to a lack of valid recipients.";
 
 /* Error message when attempting to send message */
 "ERROR_DESCRIPTION_SENDING_UNAUTHORIZED" = "Aquest dispositiu no es troba registrat per al vostre número. Cal que reinstal·leu el Signal.";
@@ -412,8 +475,17 @@
 /* No comment provided by engineer. */
 "GROUP_MEMBER_LEFT" = "%@ ha abandonat el grup.";
 
+/* Button label for the 'call group member' button */
+"GROUP_MEMBERS_CALL" = "Call";
+
 /* header for table which lists the members of this group thread */
 "GROUP_MEMBERS_HEADER" = "Membres del grup";
+
+/* Button label for the 'send message to group member' button */
+"GROUP_MEMBERS_SEND_MESSAGE" = "Send Message";
+
+/* Button label for the 'show contact info' button */
+"GROUP_MEMBERS_VIEW_CONTACT_INFO" = "Contact Info";
 
 /* No comment provided by engineer. */
 "GROUP_REMOVING" = "S'està abandonant el grup %@";
@@ -429,6 +501,9 @@
 
 /* No comment provided by engineer. */
 "GROUP_YOU_LEFT" = "Heu abandonat el grup.";
+
+/* A label for conversations with blocked users. */
+"HOME_VIEW_BLOCKED_CONTACT_CONVERSATION" = "Blocat";
 
 /* {{number of hours}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 hours}}'. See other *_TIME_AMOUNT strings */
 "HOURS_TIME_AMOUNT" = "%u hores";
@@ -526,6 +601,9 @@
 /* media picker option to take photo or video */
 "MEDIA_FROM_CAMERA_BUTTON" = "Càmera";
 
+/* action sheet button title when choosing attachment type */
+"MEDIA_FROM_DOCUMENT_PICKER_BUTTON" = "Document";
+
 /* media picker option to choose from library */
 "MEDIA_FROM_LIBRARY_BUTTON" = "Galeria";
 
@@ -546,6 +624,12 @@
 
 /* Indicates that this 1:1 conversation has been blocked. */
 "MESSAGES_VIEW_CONTACT_BLOCKED" = "Heu blocat aquest usuari";
+
+/* Action sheet title after tapping on failed download. */
+"MESSAGES_VIEW_FAILED_DOWNLOAD_ACTIONSHEET_TITLE" = "Download Failed.";
+
+/* Action sheet button text */
+"MESSAGES_VIEW_FAILED_DOWNLOAD_RETRY_ACTION" = "Download Again";
 
 /* Indicates that a single member of this group has been blocked. */
 "MESSAGES_VIEW_GROUP_1_MEMBER_BLOCKED" = "Heu blocat 1 membre d'aquest grup";
@@ -594,6 +678,9 @@
 /* No comment provided by engineer. */
 "MULTIDEVICE_PAIRING_MAX_RECOVERY" = "Haveu arribat al màxim de dispositius que podeu emparellar amb el vostre compte. Elimineu-ne algun i proveu de nou més tard.";
 
+/* An explanation of the consequences of muting a thread. */
+"MUTE_BEHAVIOR_EXPLANATION" = "You will not receive notifications for muted conversations.";
+
 /* No comment provided by engineer. */
 "NETWORK_ERROR_RECOVERY" = "Comproveu que esteu connectat i proveu de nou.";
 
@@ -621,7 +708,7 @@
 /* No comment provided by engineer. */
 "NEW_GROUP_DEFAULT_TITLE" = "Grup nou";
 
-/* No comment provided by engineer. */
+/* Placeholder text for group name field */
 "NEW_GROUP_NAMEGROUP_REQUEST_DEFAULT" = "Nom d'aquest grup";
 
 /* No comment provided by engineer. */
@@ -755,7 +842,7 @@
 "REGISTER_CONTACTS_WELCOME" = "Us donem la benvinguda!";
 
 /* No comment provided by engineer. */
-"REGISTER_FAILED_TRY_AGAIN" = "Intenta-ho de nou";
+"REGISTER_FAILED_TRY_AGAIN" = "Try Again";
 
 /* No comment provided by engineer. */
 "REGISTER_RATE_LIMITING_BODY" = "Ho heu provat massa vegades. Espereu un minut abans de tornar a provar-ho.";
@@ -833,10 +920,16 @@
 "SECURE_SESSION_RESET" = "La sessió segura a estat reiniciada.";
 
 /* No comment provided by engineer. */
-"SEND_AGAIN_BUTTON" = "Envia de nou";
+"SEND_AGAIN_BUTTON" = "Send Again";
 
 /* No comment provided by engineer. */
 "SEND_BUTTON_TITLE" = "Envia";
+
+/* Header title for the 'send external file' view. */
+"SEND_EXTERNAL_FILE_HEADER_TITLE" = "Select a Recipient for:";
+
+/* Title for the 'send external file' view. */
+"SEND_EXTERNAL_FILE_VIEW_TITLE" = "Send File";
 
 /* Alert body after invite failed */
 "SEND_INVITE_FAILURE" = "Ha fallat l'enviament de la invitació, torneu a provar-ho més tard.";
@@ -875,10 +968,7 @@
 "SETTINGS_ADVANCED_TITLE" = "Avançada";
 
 /* A label for the 'add phone number' button in the block list table. */
-"SETTINGS_BLOCK_LIST_ADD_BUTTON" = "Add…";
-
-/* A footer title for the block list table. */
-"SETTINGS_BLOCK_LIST_FOOTER_TITLE" = "Blocked users will not be able to call you or send you messages.";
+"SETTINGS_BLOCK_LIST_ADD_BUTTON" = "Afegeix...";
 
 /* A label that indicates the user has no Signal contacts. */
 "SETTINGS_BLOCK_LIST_NO_CONTACTS" = "No teniu cap contacte al Signal.";
@@ -1015,6 +1105,9 @@
 /* In Inbox view, last message label for thread with corrupted attachment. */
 "UNKNOWN_ATTACHMENT_LABEL" = "Fitxer adjunt desconegut";
 
+/* No comment provided by engineer. */
+"UNKNOWN_CONTACT_BLOCK_OFFER" = "L'usuari no és als vostres contactes. Voleu blocar-lo?";
+
 /* Displayed if for some reason we can't determine a contacts phone number *or* name */
 "UNKNOWN_CONTACT_NAME" = "Contacte desconegut";
 
@@ -1078,11 +1171,8 @@
 /* button text during registration to submit your SMS verification code */
 "VERIFICATION_CHALLENGE_SUBMIT_CODE" = "Tramet el codi de verificació";
 
-/* Navigation title in the registration flow - during the sms code verification process. */
-"VERIFICATION_HEADER" = "Verificació";
-
 /* Label indicating the phone number currently being verified. */
-"VERIFICATION_PHONE_NUMBER_FORMAT" = "S'està verificant: %@";
+"VERIFICATION_PHONE_NUMBER_FORMAT" = "Introduïu el codi de verificació que hem enviat a %@.";
 
 /* table cell label in conversation settings */
 "VERIFY_PRIVACY" = "Verifica els números de seguretat";

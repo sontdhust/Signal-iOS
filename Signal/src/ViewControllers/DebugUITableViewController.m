@@ -48,6 +48,11 @@ NS_ASSUME_NONNULL_BEGIN
                                                           [DebugUITableViewController sendTextMessage:100
                                                                                                thread:thread];
                                                       }],
+                                      [OWSTableItem itemWithTitle:@"Send 1,000 messages (1/sec.)"
+                                                      actionBlock:^{
+                                                          [DebugUITableViewController sendTextMessage:1000
+                                                                                               thread:thread];
+                                                      }],
                                       [OWSTableItem itemWithTitle:@"Send text/x-signal-plain"
                                                       actionBlock:^{
                                                           [DebugUITableViewController sendOversizeTextMessage:thread];
@@ -134,8 +139,10 @@ NS_ASSUME_NONNULL_BEGIN
     for (int i=0; i < 32; i++) {
         [message appendString:@"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse rutrum, nulla vitae pretium hendrerit, tellus turpis pharetra libero, vitae sodales tortor ante vel sem. Fusce sed nisl a lorem gravida tincidunt. Suspendisse efficitur non quam ac sodales. Aenean ut velit maximus, posuere sem a, accumsan nunc. Donec ullamcorper turpis lorem. Quisque dignissim purus eu placerat ultricies. Proin at urna eget mi semper congue. Aenean non elementum ex. Praesent pharetra quam at sem vestibulum, vestibulum ornare dolor elementum. Vestibulum massa tortor, scelerisque sit amet pulvinar a, rhoncus vitae nisl. Sed mi nunc, tempus at varius in, malesuada vitae dui. Vivamus efficitur pulvinar erat vitae congue. Proin vehicula turpis non felis congue facilisis. Nullam aliquet dapibus ligula ac mollis. Etiam sit amet posuere lorem, in rhoncus nisi."];
     }
-    
-    SignalAttachment *attachment = [SignalAttachment oversizeTextAttachmentWithText:message];
+
+    SignalAttachment *attachment = [SignalAttachment attachmentWithData:[message dataUsingEncoding:NSUTF8StringEncoding]
+                                                                dataUTI:SignalAttachment.kOversizeTextAttachmentUTI
+                                                               filename:nil];
     [ThreadUtil sendMessageWithAttachment:attachment
                                  inThread:thread
                             messageSender:messageSender];
@@ -157,8 +164,8 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)sendRandomAttachment:(TSThread *)thread
                          uti:(NSString *)uti {
     OWSMessageSender *messageSender = [Environment getCurrent].messageSender;
-    SignalAttachment *attachment = [SignalAttachment genericAttachmentWithData:[self createRandomNSDataOfSize:256]
-                                                                       dataUTI:uti];
+    SignalAttachment *attachment =
+        [SignalAttachment attachmentWithData:[self createRandomNSDataOfSize:256] dataUTI:uti filename:nil];
     [ThreadUtil sendMessageWithAttachment:attachment
                                  inThread:thread
                             messageSender:messageSender];

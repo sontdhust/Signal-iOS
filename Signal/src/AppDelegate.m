@@ -9,11 +9,13 @@
 #import "Environment.h"
 #import "NotificationsManager.h"
 #import "OWSContactsManager.h"
+#import "OWSContactsSyncing.h"
 #import "OWSStaleNotificationObserver.h"
 #import "Pastelog.h"
 #import "PropertyListPreferences.h"
 #import "PushManager.h"
 #import "Release.h"
+#import "SendExternalFileViewController.h"
 #import "Signal-Swift.h"
 #import "TSMessagesManager.h"
 #import "TSSocketManager.h"
@@ -45,6 +47,7 @@ static NSString *const kURLHostVerifyPrefix             = @"verify";
 @property (nonatomic, retain) UIWindow *screenProtectionWindow;
 @property (nonatomic) OWSIncomingMessageReadObserver *incomingMessageReadObserver;
 @property (nonatomic) OWSStaleNotificationObserver *staleNotificationObserver;
+@property (nonatomic) OWSContactsSyncing *contactsSyncing;
 
 @end
 
@@ -140,48 +143,54 @@ static NSString *const kURLHostVerifyPrefix             = @"verify";
 
     // At this point, potentially lengthy DB locking migrations could be running.
     // Avoid blocking app launch by putting all further possible DB access in async thread.
-    UIApplicationState launchState = application.applicationState;
-    [[TSAccountManager sharedInstance] ifRegistered:YES runAsync:^{
-        if (launchState == UIApplicationStateInactive) {
-            DDLogWarn(@"The app was launched from inactive");
-            [TSSocketManager becomeActiveFromForeground];
-        } else if (launchState == UIApplicationStateBackground) {
-            DDLogWarn(@"The app was launched from being backgrounded");
-            [TSSocketManager becomeActiveFromBackgroundExpectMessage:NO];
-        } else {
-            DDLogWarn(@"The app was launched in an unknown way");
-        }
+    [[TSAccountManager sharedInstance]
+        ifRegistered:YES
+            runAsync:^{
+                DDLogInfo(
+                    @"%@ running post launch block for registered user: %@", self.tag, [TSAccountManager localNumber]);
 
-        RTCInitializeSSL();
+                [TSSocketManager requestSocketOpen];
 
-        [OWSSyncPushTokensJob runWithPushManager:[PushManager sharedManager]
-                                  accountManager:[Environment getCurrent].accountManager
-                                     preferences:[Environment preferences]].then(^{
-            DDLogDebug(@"%@ Successfully ran syncPushTokensJob.", self.tag);
-        }).catch(^(NSError *_Nonnull error) {
-            DDLogDebug(@"%@ Failed to run syncPushTokensJob with error: %@", self.tag, error);
-        });
+                RTCInitializeSSL();
 
-        // Clean up any messages that expired since last launch.
-        [[[OWSDisappearingMessagesJob alloc] initWithStorageManager:[TSStorageManager sharedManager]] run];
+                [OWSSyncPushTokensJob runWithPushManager:[PushManager sharedManager]
+                                          accountManager:[Environment getCurrent].accountManager
+                                             preferences:[Environment preferences]]
+                    .then(^{
+                        DDLogDebug(@"%@ Successfully ran syncPushTokensJob.", self.tag);
+                    })
+                    .catch(^(NSError *_Nonnull error) {
+                        DDLogDebug(@"%@ Failed to run syncPushTokensJob with error: %@", self.tag, error);
+                    });
 
-        // Mark all "attempting out" messages as "unsent", i.e. any messages that were not successfully
-        // sent before the app exited should be marked as failures.
-        [[[OWSFailedMessagesJob alloc] initWithStorageManager:[TSStorageManager sharedManager]] run];
-        [[[OWSFailedAttachmentDownloadsJob alloc] initWithStorageManager:[TSStorageManager sharedManager]] run];
+                // Clean up any messages that expired since last launch.
+                [[[OWSDisappearingMessagesJob alloc] initWithStorageManager:[TSStorageManager sharedManager]] run];
 
-        [AppStoreRating setupRatingLibrary];
-    }];
+                // Mark all "attempting out" messages as "unsent", i.e. any messages that were not successfully
+                // sent before the app exited should be marked as failures.
+                [[[OWSFailedMessagesJob alloc] initWithStorageManager:[TSStorageManager sharedManager]] run];
+                [[[OWSFailedAttachmentDownloadsJob alloc] initWithStorageManager:[TSStorageManager sharedManager]] run];
 
-    [[TSAccountManager sharedInstance] ifRegistered:NO runAsync:^{
-        dispatch_async(dispatch_get_main_queue(), ^{
-            UITapGestureRecognizer *gesture = [[UITapGestureRecognizer alloc] initWithTarget:[Pastelog class]
-                                                                                      action:@selector(submitLogs)];
-            gesture.numberOfTapsRequired = 8;
-            [self.window addGestureRecognizer:gesture];
-        });
-        RTCInitializeSSL();
-    }];
+                [AppStoreRating setupRatingLibrary];
+            }];
+
+    [[TSAccountManager sharedInstance]
+        ifRegistered:NO
+            runAsync:^{
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    DDLogInfo(@"%@ running post launch block for unregistered user.", self.tag);
+                    [TSSocketManager requestSocketOpen];
+
+                    UITapGestureRecognizer *gesture =
+                        [[UITapGestureRecognizer alloc] initWithTarget:[Pastelog class] action:@selector(submitLogs)];
+                    gesture.numberOfTapsRequired = 8;
+                    [self.window addGestureRecognizer:gesture];
+                });
+                RTCInitializeSSL();
+            }];
+
+    self.contactsSyncing = [[OWSContactsSyncing alloc] initWithContactsManager:[Environment getCurrent].contactsManager
+                                                                 messageSender:[Environment getCurrent].messageSender];
 
     return YES;
 }
@@ -255,6 +264,54 @@ static NSString *const kURLHostVerifyPrefix             = @"verify";
         } else {
             DDLogWarn(@"Application opened with an unknown URL action: %@", url.host);
         }
+    } else if ([url.scheme.lowercaseString isEqualToString:@"file"]) {
+        NSString *filename = url.lastPathComponent;
+        if ([filename stringByDeletingPathExtension].length < 1) {
+            DDLogError(@"Application opened with URL invalid filename: %@", url);
+            return NO;
+        }
+        NSString *fileExtension = [filename pathExtension];
+        if (fileExtension.length < 1) {
+            DDLogError(@"Application opened with URL missing file extension: %@", url);
+            return NO;
+        }
+        NSString *utiType = [MIMETypeUtil utiTypeForFileExtension:fileExtension];
+        if (utiType.length < 1) {
+            DDLogError(@"Application opened with URL of unknown UTI type: %@", url);
+            return NO;
+        }
+        NSData *data = [NSData dataWithContentsOfURL:url];
+        if (!data) {
+            DDLogError(@"Application opened with URL with unloadable content: %@", url);
+            return NO;
+        }
+        SignalAttachment *attachment = [SignalAttachment attachmentWithData:data dataUTI:utiType filename:filename];
+        if (!attachment) {
+            DDLogError(@"Application opened with URL with invalid content: %@", url);
+            return NO;
+        }
+        if ([attachment hasError]) {
+            DDLogError(@"Application opened with URL with content error: %@ %@", url, [attachment errorName]);
+            return NO;
+        }
+        DDLogInfo(@"Application opened with URL: %@", url);
+
+        [[TSAccountManager sharedInstance]
+            ifRegistered:YES
+                runAsync:^{
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        SendExternalFileViewController *viewController = [SendExternalFileViewController new];
+                        viewController.attachment = attachment;
+                        UINavigationController *navigationController =
+                            [[UINavigationController alloc] initWithRootViewController:viewController];
+                        [[[Environment getCurrent] signalsViewController]
+                            presentTopLevelModalViewController:navigationController
+                                              animateDismissal:NO
+                                           animatePresentation:YES];
+                    });
+                }];
+
+        return YES;
     } else {
         DDLogWarn(@"Application opened with an unknown URL scheme: %@", url.scheme);
     }
@@ -273,7 +330,7 @@ static NSString *const kURLHostVerifyPrefix             = @"verify";
                                                // We're double checking that the app is active, to be sure since we
                                                // can't verify in production env due to code
                                                // signing.
-                                               [TSSocketManager becomeActiveFromForeground];
+                                               [TSSocketManager requestSocketOpen];
                                                [[Environment getCurrent].contactsManager verifyABPermission];
                                                
                                                // This will fetch new messages, if we're using domain
@@ -300,7 +357,6 @@ static NSString *const kURLHostVerifyPrefix             = @"verify";
           dispatch_sync(dispatch_get_main_queue(), ^{
               [self protectScreen];
               [[[Environment getCurrent] signalsViewController] updateInboxCountLabel];
-              [TSSocketManager resignActivity];
           });
       }
 

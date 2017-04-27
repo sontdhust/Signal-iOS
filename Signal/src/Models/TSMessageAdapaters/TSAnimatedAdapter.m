@@ -14,12 +14,16 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface TSAnimatedAdapter ()
+//<FLAnimatedImageViewDebugDelegate>
 
-@property (nonatomic, nullable) UIImageView *cachedImageView;
+@property (nonatomic, nullable) FLAnimatedImageView *cachedImageView;
 @property (nonatomic) UIImage *image;
 @property (nonatomic) TSAttachmentStream *attachment;
 @property (nonatomic, nullable) AttachmentUploadView *attachmentUploadView;
 @property (nonatomic) BOOL incoming;
+
+// See comments on OWSMessageMediaAdapter.
+@property (nonatomic, nullable, weak) id lastPresentingCell;
 
 @end
 
@@ -43,22 +47,21 @@ NS_ASSUME_NONNULL_BEGIN
     return self;
 }
 
-- (void)dealloc {
+- (void)clearAllViews
+{
+    [_cachedImageView removeFromSuperview];
     _cachedImageView = nil;
-    _attachment      = nil;
-    _attachmentId    = nil;
-    _image           = nil;
-    _fileData        = nil;
+    _attachmentUploadView = nil;
 }
 
 - (void)clearCachedMediaViews {
     [super clearCachedMediaViews];
-    _cachedImageView = nil;
+    [self clearAllViews];
 }
 
 - (void)setAppliesMediaViewMaskAsOutgoing:(BOOL)appliesMediaViewMaskAsOutgoing {
     [super setAppliesMediaViewMaskAsOutgoing:appliesMediaViewMaskAsOutgoing];
-    _cachedImageView = nil;
+    [self clearAllViews];
 }
 
 #pragma mark - NSObject
@@ -66,6 +69,26 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSUInteger)hash
 {
     return super.hash ^ self.image.hash;
+}
+
+#pragma mark - OWSMessageMediaAdapter
+
+- (void)setCellVisible:(BOOL)isVisible
+{
+    if (isVisible) {
+        [self.cachedImageView startAnimating];
+    } else {
+        [self.cachedImageView stopAnimating];
+    }
+}
+
+- (void)clearCachedMediaViewsIfLastPresentingCell:(id)cell
+{
+    OWSAssert(cell);
+
+    if (cell == self.lastPresentingCell) {
+        [self clearCachedMediaViews];
+    }
 }
 
 #pragma mark - JSQMessageMediaData protocol
@@ -77,8 +100,8 @@ NS_ASSUME_NONNULL_BEGIN
         FLAnimatedImageView *imageView = [[FLAnimatedImageView alloc] init];
         imageView.animatedImage        = animatedGif;
         CGSize size                    = [self mediaViewDisplaySize];
-        imageView.frame                = CGRectMake(0.0, 0.0, size.width, size.height);
         imageView.contentMode          = UIViewContentModeScaleAspectFill;
+        imageView.frame                = CGRectMake(0.0, 0.0, size.width, size.height);
         imageView.clipsToBounds        = YES;
         [JSQMessagesMediaViewBubbleImageMasker applyBubbleImageMaskToMediaView:imageView
                                                                     isOutgoing:self.appliesMediaViewMaskAsOutgoing];
@@ -108,8 +131,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)performEditingAction:(SEL)action
 {
     if (action == @selector(copy:)) {
-        UIPasteboard *pasteBoard = UIPasteboard.generalPasteboard;
-        [pasteBoard setData:self.fileData forPasteboardType:(__bridge NSString *)kUTTypeGIF];
+        UIPasteboard *pasteboard = UIPasteboard.generalPasteboard;
+        [pasteboard setData:self.fileData forPasteboardType:(__bridge NSString *)kUTTypeGIF];
     } else if (action == NSSelectorFromString(@"save:")) {
         NSData *photoData = self.fileData;
         ALAssetsLibrary *library = [[ALAssetsLibrary alloc] init];

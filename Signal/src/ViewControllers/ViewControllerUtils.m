@@ -5,6 +5,7 @@
 #import "ViewControllerUtils.h"
 #import "PhoneNumber.h"
 #import "StringUtil.h"
+#import <AVFoundation/AVFoundation.h>
 #import <SignalServiceKit/PhoneNumberUtil.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -66,6 +67,45 @@ NS_ASSUME_NONNULL_BEGIN
     UITextPosition *pos =
         [textField positionFromPosition:textField.beginningOfDocument offset:(NSInteger)cursorPositionAfterReformat];
     [textField setSelectedTextRange:[textField textRangeFromPosition:pos toPosition:pos]];
+}
+
++ (void)setAudioIgnoresHardwareMuteSwitch:(BOOL)shouldIgnore
+{
+    NSError *error = nil;
+    BOOL success = [[AVAudioSession sharedInstance]
+        setCategory:(shouldIgnore ? AVAudioSessionCategoryPlayback : AVAudioSessionCategoryPlayAndRecord)error:&error];
+    OWSAssert(!error);
+    if (!success || error) {
+        DDLogError(@"%@ Error in setAudioIgnoresHardwareMuteSwitch: %d", self.tag, shouldIgnore);
+    }
+}
+
++ (NSString *)formatFileSize:(unsigned long)fileSize
+{
+    const unsigned long kOneKilobyte = 1024;
+    const unsigned long kOneMegabyte = kOneKilobyte * kOneKilobyte;
+
+    NSNumberFormatter *numberFormatter = [NSNumberFormatter new];
+    numberFormatter.numberStyle = NSNumberFormatterDecimalStyle;
+    return (fileSize > kOneMegabyte
+            ? [[numberFormatter stringFromNumber:@(round(fileSize / (CGFloat)kOneMegabyte))]
+                  stringByAppendingString:@" mb"]
+            : (fileSize > kOneKilobyte
+                      ? [[numberFormatter stringFromNumber:@(round(fileSize / (CGFloat)kOneKilobyte))]
+                            stringByAppendingString:@" kb"]
+                      : [[numberFormatter stringFromNumber:@(fileSize)] stringByAppendingString:@" bytes"]));
+}
+
+#pragma mark - Logging
+
++ (NSString *)tag
+{
+    return [NSString stringWithFormat:@"[%@]", self.class];
+}
+
+- (NSString *)tag
+{
+    return self.class.tag;
 }
 
 @end
